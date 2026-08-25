@@ -1,20 +1,20 @@
-"""Semantic search execution and disk-backed snippet resolution.
+"""Semantic and hybrid search execution and disk-backed snippet resolution.
 
-Implements ARCHITECTURE.md §9:
-- Embed natural-language query
-- Query VectorStore for top-k hits
-- Read fresh snippet from disk (start_line..end_line)
-- Return structured search results
+Implements ARCHITECTURE.md §9 & v0.2 Hybrid Search (BM25 + RRF).
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 from context_tree.config import CHROMA_DIR_NAME, DEFAULT_SEARCH_LIMIT
 from context_tree.embedder import Embedder
-from context_tree.store import VectorStore
+from context_tree.hybrid import BM25Index, reciprocal_rank_fusion
+from context_tree.store import SearchHit, VectorStore
+
+SearchMode = Literal["hybrid", "semantic", "keyword"]
 
 
 @dataclass(frozen=True)
@@ -51,14 +51,12 @@ def read_snippet_from_disk(
     if file_path.is_file():
         try:
             lines = file_path.read_text(encoding="utf-8", errors="replace").splitlines()
-            # start_line and end_line are 1-indexed inclusive
             selected = lines[max(0, start_line - 1) : end_line]
             if selected:
                 return "\n".join(selected)
         except OSError:
             pass
 
-    # Fallback to code portion of the stored document
     marker = "Code:\n"
     if marker in fallback_doc:
         return fallback_doc.split(marker, 1)[1]
@@ -69,10 +67,11 @@ def semantic_search(
     root: Path | str,
     query: str,
     limit: int = DEFAULT_SEARCH_LIMIT,
+    mode: SearchMode = "hybrid",
     store: VectorStore | None = None,
     embedder: Embedder | None = None,
 ) -> list[SearchResult]:
-    """Execute semantic code search over indexed workspace."""
+    """Execute code search (hybrid BM25+RRF, pure semantic, or pure keyword) over indexed workspace."""
     root_path = Path(root).resolve()
     chroma_dir = root_path / CHROMA_DIR_NAME
     vstore = store or VectorStore(chroma_dir)
@@ -81,8 +80,28 @@ def semantic_search(
         return []
 
     emb = embedder or Embedder()
-    q_vec = emb.encode_single(query)
-    hits = vstore.query(q_vec, limit=limit)
+    hits: list[SearchHit] = []
+
+    if mode == "semantic":
+        q_vec = emb.encode_single(query)
+        hits = vstore.query(q_vec, limit=limit)
+
+    elif mode == "keyword":
+        all_docs = vstore.get_all_documents()
+        bm25 = BM25Index()
+        bm25.build(all_docs)
+        hits = bm25.query(query, limit=limit)
+
+    else:  # hybrid
+        q_vec = emb.encode_single(query)
+        vec_hits = vstore.query(q_vec, limit=max(limit * 2, 10))
+
+        all_docs = vstore.get_all_documents()
+        bm25 = BM25Index()
+        bm25.build(all_docs)
+        bm25_hits = bm25.query(query, limit=max(limit * 2, 10))
+
+        hits = reciprocal_rank_fusion(vec_hits, bm25_hits, limit=limit)
 
     results: list[SearchResult] = []
     for hit in hits:

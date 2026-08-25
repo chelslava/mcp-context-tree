@@ -2,7 +2,7 @@
 
 Implements ARCHITECTURE.md §3, §9, §10, §11:
 - MCP stdio server via MCPServer
-- Tool registration and schemas
+- Tool registration and schemas (with hybrid search support)
 - Concurrency protection via asyncio.Lock
 """
 
@@ -12,11 +12,13 @@ import asyncio
 import json
 import logging
 from pathlib import Path
+from typing import Literal
 
 from mcp.server import MCPServer
 
 from context_tree.config import DEFAULT_SEARCH_LIMIT
 from context_tree.indexer import Indexer
+from context_tree.search import SearchMode
 from context_tree.search import semantic_search as do_semantic_search
 from context_tree.usages import find_ast_usages as do_find_ast_usages
 
@@ -28,7 +30,7 @@ _MUTEX = asyncio.Lock()
 
 def create_server() -> MCPServer:
     """Create and configure the ContextTree MCP server instance."""
-    app = MCPServer("context-tree", version="0.1.0")
+    app = MCPServer("context-tree", version="0.2.0")
 
     @app.tool(
         description=(
@@ -60,19 +62,20 @@ def create_server() -> MCPServer:
 
     @app.tool(
         description=(
-            "Natural-language search over indexed code. Returns ranked code fragments "
-            "with exact file, class, method, start_line, end_line, and code snippets."
+            "Search code by meaning and keywords (hybrid BM25+vectors, semantic, or keyword). "
+            "Returns ranked code fragments with exact file, class, method, start_line, end_line, and code snippets."
         )
     )
     async def semantic_search(
         query: str,
         directory_path: str = ".",
         limit: int = DEFAULT_SEARCH_LIMIT,
+        mode: SearchMode = "hybrid",
     ) -> str:
-        """Search code by meaning using natural language."""
+        """Search code using hybrid, semantic, or keyword matching."""
         async with _MUTEX:
             target = Path(directory_path).resolve()
-            results = do_semantic_search(target, query, limit=limit)
+            results = do_semantic_search(target, query, limit=limit, mode=mode)
             return json.dumps({"results": [r.to_dict() for r in results]}, indent=2)
 
     @app.tool(

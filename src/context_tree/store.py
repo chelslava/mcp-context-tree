@@ -22,10 +22,10 @@ from context_tree.config import COLLECTION_NAME
 
 @dataclass(frozen=True)
 class SearchHit:
-    """A single ranked hit from vector search."""
+    """A single ranked hit from vector search or BM25."""
 
     id: str
-    score: float  # 1 - cosine distance
+    score: float
     metadata: dict[str, Any]
     document: str
 
@@ -70,6 +70,21 @@ class VectorStore:
             return
         for file_path in files:
             self.collection.delete(where={"file": file_path})
+
+    def get_all_documents(self) -> list[tuple[str, str, dict[str, Any]]]:
+        """Fetch all indexed (id, document, metadata) records."""
+        if self.count() == 0:
+            return []
+        data = self.collection.get(include=["documents", "metadatas"])  # type: ignore[list-item]
+        ids = data.get("ids", [])
+        docs = data.get("documents", []) or []
+        metas = data.get("metadatas", []) or []
+        records: list[tuple[str, str, dict[str, Any]]] = []
+        for i, doc_id in enumerate(ids):
+            doc = docs[i] if i < len(docs) and docs[i] is not None else ""
+            meta = metas[i] if i < len(metas) and metas[i] is not None else {}
+            records.append((doc_id, str(doc), meta))
+        return records
 
     def query(self, query_embedding: Sequence[float], limit: int = 5) -> list[SearchHit]:
         """Query top-k most similar records by cosine similarity."""
