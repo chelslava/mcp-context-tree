@@ -1,0 +1,86 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "context-tree-mcp"
+version = "0.1.0"
+description = "Local MCP server for deep semantic code search: tree-sitter AST chunking enriched with context, embedded into a local ChromaDB vector store."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.12"
+authors = [{ name = "ContextTree MCP contributors" }]
+keywords = [
+    "mcp",
+    "model-context-protocol",
+    "semantic-search",
+    "code-search",
+    "tree-sitter",
+    "chromadb",
+    "embeddings",
+    "local-ai",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development",
+    "Topic :: Text Processing :: Indexing",
+]
+
+dependencies = [
+    "mcp[cli]>=2.0.0",
+    "tree-sitter>=0.26.0,<1.0",
+    "tree-sitter-python>=0.25.0",
+    "tree-sitter-typescript>=0.23.2",
+    "tree-sitter-javascript>=0.25.0",
+    "chromadb>=1.5.9",
+    "sentence-transformers>=6.0.0",
+]
+
+[project.scripts]
+context-tree = "context_tree.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/<your-org>/mcp-context-tree"
+Documentation = "https://github.com/<your-org>/mcp-context-tree/blob/main/ARCHITECTURE.md"
+Issues = "https://github.com/<your-org>/mcp-context-tree/issues"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.6",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/context_tree"]
+
+# --- Ruff: formatter + linter (single modern toolchain) -----------------------
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "UP",   # pyupgrade (modern syntax)
+    "B",    # flake8-bugbear
+    "SIM",  # flake8-simplify
+    "C4",   # flake8-comprehensions
+    "RUF",  # ruff-specific rules
+]
+
+# --- Pytest -------------------------------------------------------------------
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+asyncio_mode = "auto"
+pythonpath = ["src"]

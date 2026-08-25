@@ -1,0 +1,92 @@
+# ==============================================================================
+# ContextTree MCP — .gitignore
+# Public repository: NEVER commit local indexes, secrets, or environment data.
+# ==============================================================================
+
+# --- Virtual environments ---
+venv/
+.venv/
+env/
+ENV/
+.python-version
+
+# --- Project-specific: local vector index & index state ---
+# The .chroma/ directory contains embedded copies of the *user's indexed code*.
+# It must never leave a developer's machine and must never enter Git.
+.chroma/
+*.chroma/
+chroma.sqlite3
+index_state.json
+
+# --- Environment variables / secrets ---
+.env
+.env.*
+!.env.example
+
+# --- Python bytecode & runtime caches ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# --- Packaging / build artifacts ---
+build/
+dist/
+wheels/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# --- Test & coverage caches ---
+.pytest_cache/
+.tox/
+.nox/
+.hypothesis/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# --- Linters & type checkers ---
+.mypy_cache/
+.dmypy.json
+.ruff_cache/
+.pytype/
+pyrightconfig.json.bak
+
+# --- Jupyter ---
+.ipynb_checkpoints/
+
+# --- IDE / editors ---
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.settings/
+
+# --- Operating systems ---
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+# Linux
+.nfs*
+
+# --- Local agent tooling / code intelligence caches ---
+.codegraph/
+.omc/
+.omo/
+
+# --- Logs & temp files ---
+logs/
+*.log
+*.tmp
