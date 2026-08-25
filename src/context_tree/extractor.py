@@ -193,7 +193,11 @@ def _emit_class(
         type_node = class_node.child_by_field_name("type")
         impl_name = _node_text(ctx.source, type_node).strip() if type_node else ""
         body = class_node.child_by_field_name("body")
-        nested_chain = f"{class_chain}::{impl_name}" if class_chain and impl_name else (impl_name or class_chain)
+        nested_chain = (
+            f"{class_chain}::{impl_name}"
+            if class_chain and impl_name
+            else (impl_name or class_chain)
+        )
         if body is not None:
             for child in body.named_children:
                 _walk(child, nested_chain, ctx)
@@ -327,7 +331,11 @@ def _walk(
 
     if ntype in cfg.function_node_types or ntype in cfg.method_node_types:
         _emit_callable(
-            node, bounds=bounds or node, class_chain=class_chain, ctx=ctx, comment_node=pending_comment
+            node,
+            bounds=bounds or node,
+            class_chain=class_chain,
+            ctx=ctx,
+            comment_node=pending_comment,
         )
         return
 

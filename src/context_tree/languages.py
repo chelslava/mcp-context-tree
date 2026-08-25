@@ -166,9 +166,7 @@ JAVA = LanguageConfig(
 ALL_LANGUAGES = (PYTHON, TYPESCRIPT, TSX, JAVASCRIPT, GO, RUST, CSHARP, JAVA)
 
 EXTENSION_TO_CONFIG: dict[str, LanguageConfig] = {
-    ext.lower(): config
-    for config in ALL_LANGUAGES
-    for ext in config.extensions
+    ext.lower(): config for config in ALL_LANGUAGES for ext in config.extensions
 }
 
 

@@ -12,7 +12,6 @@ import asyncio
 import json
 import logging
 from pathlib import Path
-from typing import Literal
 
 from mcp.server import MCPServer
 
@@ -63,7 +62,8 @@ def create_server() -> MCPServer:
     @app.tool(
         description=(
             "Search code by meaning and keywords (hybrid BM25+vectors, semantic, or keyword). "
-            "Returns ranked code fragments with exact file, class, method, start_line, end_line, and code snippets."
+            "Returns ranked code fragments with exact file, class, method, start_line, end_line, "
+            "and code snippets."
         )
     )
     async def semantic_search(

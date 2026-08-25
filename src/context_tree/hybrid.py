@@ -11,8 +11,8 @@ from __future__ import annotations
 import math
 import re
 from collections import Counter
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Sequence
 
 from context_tree.store import SearchHit
 
@@ -119,7 +119,9 @@ class BM25Index:
                 # Robertson-Spärck Jones IDF
                 idf = math.log(1.0 + (self.total_docs - df + 0.5) / (df + 0.5))
                 # BM25 term weight
-                denom = tf + self.k1 * (1.0 - self.b + self.b * (doc.length / (self.avg_len or 1.0)))
+                denom = tf + self.k1 * (
+                    1.0 - self.b + self.b * (doc.length / (self.avg_len or 1.0))
+                )
                 score += idf * (tf * (self.k1 + 1.0)) / (denom or 1.0)
 
             if score > 0.0:

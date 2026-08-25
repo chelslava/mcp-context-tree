@@ -71,7 +71,7 @@ def semantic_search(
     store: VectorStore | None = None,
     embedder: Embedder | None = None,
 ) -> list[SearchResult]:
-    """Execute code search (hybrid BM25+RRF, pure semantic, or pure keyword) over indexed workspace."""
+    """Execute code search (hybrid BM25+RRF, semantic, or keyword) over workspace."""
     root_path = Path(root).resolve()
     chroma_dir = root_path / CHROMA_DIR_NAME
     vstore = store or VectorStore(chroma_dir)

@@ -54,9 +54,7 @@ async def watch_workspace(
 
     async for changes in awatch(root_path, debounce=debounce_ms, stop_event=stop_event):
         relevant = [
-            (change, p)
-            for change, p in changes
-            if _is_indexable_change(change, p, root_path)
+            (change, p) for change, p in changes if _is_indexable_change(change, p, root_path)
         ]
         if not relevant:
             continue

@@ -358,4 +358,3 @@ public class AccountManager {
     deposit = _find(blocks, "deposit", chain="AccountManager")
     assert deposit.block_type == "method"
     assert "Deposit funds" in deposit.docstring
-
