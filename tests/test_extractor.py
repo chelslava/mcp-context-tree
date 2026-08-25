@@ -230,3 +230,132 @@ def test_broken_syntax_still_yields_blocks(tmp_path: Path) -> None:
 def test_unsupported_or_missing_paths_yield_nothing(tmp_path: Path) -> None:
     assert extract_blocks(tmp_path / "notes.toml") == []
     assert extract_blocks(tmp_path / "does_not_exist.py") == []
+
+
+def test_go_golden_fixture(tmp_path: Path) -> None:
+    go_source = """\\
+package main
+
+// Greet greets the user by name.
+func Greet(name string) string {
+    return "Hello " + name
+}
+
+// Server handles requests.
+type Server struct {
+    port int
+}
+
+// Start starts listening.
+func (s *Server) Start() error {
+    return nil
+}
+"""
+    source_path = _write(tmp_path, "main.go", go_source)
+    blocks = extract_blocks(source_path, root=tmp_path)
+    assert len(blocks) == 3
+
+    greet = _find(blocks, "Greet")
+    assert greet.block_type == "function"
+    assert greet.language == "go"
+    assert "Greet greets the user" in greet.docstring
+
+    server = _find(blocks, "Server")
+    assert server.block_type == "class_signature"
+    assert "Server handles requests" in server.docstring
+
+    start = _find(blocks, "Start", chain="Server")
+    assert start.block_type == "method"
+    assert "Start starts listening" in start.docstring
+
+
+def test_rust_golden_fixture(tmp_path: Path) -> None:
+    rs_source = """\\
+/// Global worker function.
+pub fn worker() -> i32 {
+    42
+}
+
+/// A compute engine.
+pub struct Engine;
+
+impl Engine {
+    /// Start the engine.
+    pub fn start(&self) {}
+}
+"""
+    source_path = _write(tmp_path, "lib.rs", rs_source)
+    blocks = extract_blocks(source_path, root=tmp_path)
+    assert len(blocks) == 3
+
+    worker = _find(blocks, "worker")
+    assert worker.block_type == "function"
+    assert worker.language == "rust"
+    assert "Global worker" in worker.docstring
+
+    engine = _find(blocks, "Engine")
+    assert engine.block_type == "class_signature"
+
+    start = _find(blocks, "start", chain="Engine")
+    assert start.block_type == "method"
+    assert "Start the engine" in start.docstring
+
+
+def test_csharp_golden_fixture(tmp_path: Path) -> None:
+    cs_source = """\\
+namespace Demo;
+
+/// <summary>
+/// Service description.
+/// </summary>
+public class AuthService {
+    /// <summary>
+    /// Log in user.
+    /// </summary>
+    public bool Login(string u, string p) {
+        return true;
+    }
+}
+"""
+    source_path = _write(tmp_path, "Auth.cs", cs_source)
+    blocks = extract_blocks(source_path, root=tmp_path)
+    assert len(blocks) == 2
+
+    auth = _find(blocks, "AuthService")
+    assert auth.block_type == "class_signature"
+    assert auth.language == "c_sharp"
+    assert "Service description" in auth.docstring
+
+    login = _find(blocks, "Login", chain="AuthService")
+    assert login.block_type == "method"
+    assert "Log in user" in login.docstring
+
+
+def test_java_golden_fixture(tmp_path: Path) -> None:
+    java_source = """\\
+package com.demo;
+
+/**
+ * Account manager class.
+ */
+public class AccountManager {
+    /**
+     * Deposit funds.
+     */
+    public void deposit(double amount) {
+    }
+}
+"""
+    source_path = _write(tmp_path, "AccountManager.java", java_source)
+    blocks = extract_blocks(source_path, root=tmp_path)
+    assert len(blocks) == 2
+
+    mgr = _find(blocks, "AccountManager")
+    assert mgr.block_type == "class_signature"
+    assert mgr.language == "java"
+    assert "Account manager class" in mgr.docstring
+
+    deposit = _find(blocks, "deposit", chain="AccountManager")
+    assert deposit.block_type == "method"
+    assert "Deposit funds" in deposit.docstring
+

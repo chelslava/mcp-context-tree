@@ -1,8 +1,4 @@
-"""AST extraction: walk parsed trees and emit logical code blocks.
-
-Implements ARCHITECTURE.md §4.4 granularity — functions, methods and class
-signatures (with docstrings) — plus §7.1 semantics for class chains.
-"""
+"""AST extraction: walk parsed trees and emit logical code blocks across languages."""
 
 from __future__ import annotations
 
@@ -19,8 +15,7 @@ from context_tree.parser import ParsedFile, parse_file
 BlockType = Literal["function", "method", "class_signature"]
 
 _EXPORT_STATEMENT = "export_statement"
-
-_PY_STRING_LITERAL_RE = re.compile(r"^([bBrRuUfF]{0,3})(\"\"\"|'''|\"|\')(.*?)\2$", re.DOTALL)
+_PY_STRING_LITERAL_RE = re.compile(r"^([bBrRuUfF]{0,3})(\"\"\"|'''|\"|')(.*?)\2$", re.DOTALL)
 
 
 @dataclass(frozen=True)
@@ -78,9 +73,6 @@ def _extract_from_parsed(parsed: ParsedFile) -> list[CodeBlock]:
     return ctx.blocks
 
 
-# --- node helpers ----------------------------------------------------------------
-
-
 def _node_text(source: bytes, node: Node) -> str:
     return source[node.start_byte : node.end_byte].decode("utf-8", errors="replace")
 
@@ -99,7 +91,6 @@ def _field_text(source: bytes, node: Node, field_name: str) -> str:
 
 
 def _python_string_node(definition_node: Node) -> Node | None:
-    """Return the docstring string-node of a python function/class, if present."""
     body = definition_node.child_by_field_name("body")
     if body is None or not body.named_children:
         return None
@@ -116,21 +107,50 @@ def _clean_python_string(raw: str) -> str:
     return inner.strip()
 
 
-def _attached_jsdoc(ctx: _WalkContext, anchor: Node, pending: Node | None) -> Node | None:
-    """Return an attached JSDoc comment node (adjacent or one blank line apart)."""
-    candidates = (pending, anchor.prev_named_sibling)
+def _attached_comment(
+    ctx: _WalkContext, anchor: Node, pending: Node | None
+) -> tuple[str, Node | None]:
+    """Return attached preceding comment text and first comment node (if adjacent)."""
+    start_node = pending or anchor.prev_named_sibling
+    if start_node is None:
+        return "", None
+
+    curr = start_node
     anchor_row = anchor.start_point[0]
-    for candidate in candidates:
-        if candidate is None or candidate.type != "comment":
-            continue
-        text = _node_text(ctx.source, candidate)
-        adjacent = candidate.end_point[0] >= anchor_row - 2
-        if text.lstrip().startswith("/**") and adjacent:
-            return candidate
-    return None
+    comment_nodes: list[Node] = []
+
+    while curr is not None and (
+        "comment" in curr.type or curr.type in ("line_comment", "block_comment")
+    ):
+        if not comment_nodes:
+            if curr.end_point[0] < anchor_row - 2:
+                break
+        else:
+            if curr.end_point[0] < comment_nodes[-1].start_point[0] - 1:
+                break
+        comment_nodes.append(curr)
+        curr = curr.prev_named_sibling
+
+    if not comment_nodes:
+        return "", None
+
+    comment_nodes.reverse()
+    first_doc_node = comment_nodes[0]
+    full_text = "\n".join(_node_text(ctx.source, n).strip() for n in comment_nodes)
+    return full_text, first_doc_node
 
 
-# --- emission ----------------------------------------------------------------------
+def _extract_go_receiver_type(ctx: _WalkContext, method_node: Node) -> str:
+    receiver = method_node.child_by_field_name("receiver")
+    if receiver is not None:
+        raw = _node_text(ctx.source, receiver).strip("() ")
+        # raw like "(s *Server)" or "(s Server)"
+        parts = raw.split()
+        if len(parts) >= 2:
+            return parts[-1].lstrip("*")
+        elif parts:
+            return parts[0].lstrip("*")
+    return ""
 
 
 def _emit_class(
@@ -138,29 +158,66 @@ def _emit_class(
     span_start: Node,
     class_chain: str,
     ctx: _WalkContext,
-    pending_jsdoc: Node | None,
+    pending_comment: Node | None,
 ) -> None:
     cfg = ctx.config
+    ntype = class_node.type
+
+    # Go type_declaration -> type_spec
+    if cfg.name == "go" and ntype == "type_declaration":
+        for spec in class_node.named_children:
+            if spec.type == "type_spec":
+                name = _field_text(ctx.source, spec, "name")
+                if not name:
+                    continue
+                doc, doc_node = _attached_comment(ctx, class_node, pending_comment)
+                start_line = _start_line(doc_node) if doc_node else _start_line(class_node)
+                end_line = _end_line(class_node)
+                ctx.blocks.append(
+                    CodeBlock(
+                        file=ctx.file,
+                        language=cfg.name,
+                        block_type="class_signature",
+                        name=name,
+                        class_chain=class_chain,
+                        start_line=start_line,
+                        end_line=end_line,
+                        code=ctx.slice_lines(start_line, end_line),
+                        docstring=doc,
+                    )
+                )
+        return
+
+    # Rust impl_item
+    if cfg.name == "rust" and ntype == "impl_item":
+        type_node = class_node.child_by_field_name("type")
+        impl_name = _node_text(ctx.source, type_node).strip() if type_node else ""
+        body = class_node.child_by_field_name("body")
+        nested_chain = f"{class_chain}::{impl_name}" if class_chain and impl_name else (impl_name or class_chain)
+        if body is not None:
+            for child in body.named_children:
+                _walk(child, nested_chain, ctx)
+        return
+
     name = _field_text(ctx.source, class_node, "name")
     if not name:
         return
-    body = class_node.child_by_field_name("body")
 
+    body = class_node.child_by_field_name("body")
     docstring = ""
     start_line = _start_line(span_start)
+
     if cfg.docstring_style == "python_docstring":
-        # Signature-only block: decorators/header + docstring; members excluded.
         string_node = _python_string_node(class_node)
-        end_line = _start_line(class_node)  # header-only fallback
+        end_line = _start_line(class_node)
         if string_node is not None:
             docstring = _clean_python_string(_node_text(ctx.source, string_node))
             end_line = _end_line(string_node)
     else:
-        attached = pending_jsdoc or _attached_jsdoc(ctx, class_node, None)
-        if attached is not None:
-            docstring = _node_text(ctx.source, attached)
-            start_line = _start_line(attached)
-        # Signature ends at the opening brace line of the class body.
+        doc, doc_node = _attached_comment(ctx, class_node, pending_comment)
+        if doc_node is not None:
+            docstring = doc
+            start_line = _start_line(doc_node)
         end_line = _start_line(body) if body is not None else _end_line(class_node)
 
     ctx.blocks.append(
@@ -189,27 +246,35 @@ def _emit_callable(
     bounds: Node,
     class_chain: str,
     ctx: _WalkContext,
-    jsdoc: Node | None,
+    comment_node: Node | None,
 ) -> None:
     cfg = ctx.config
     name = _field_text(ctx.source, definition, "name")
     if not name:
         return
 
+    # Go method receiver extraction
+    if cfg.name == "go" and definition.type == "method_declaration":
+        recv_type = _extract_go_receiver_type(ctx, definition)
+        if recv_type:
+            class_chain = recv_type
+
     docstring = ""
     start_line = _start_line(bounds)
+
     if cfg.docstring_style == "python_docstring":
         string_node = _python_string_node(definition)
         if string_node is not None:
             docstring = _clean_python_string(_node_text(ctx.source, string_node))
     else:
-        attached = jsdoc or _attached_jsdoc(ctx, definition, None)
-        if attached is not None:
-            docstring = _node_text(ctx.source, attached)
-            start_line = _start_line(attached)
+        doc, doc_node = _attached_comment(ctx, definition, comment_node)
+        if doc_node is not None:
+            docstring = doc
+            start_line = _start_line(doc_node)
 
-    is_method = definition.type in cfg.method_node_types or bool(
-        class_chain and cfg.docstring_style == "python_docstring"
+    is_method = bool(
+        definition.type in cfg.method_node_types
+        or (class_chain and (cfg.docstring_style == "python_docstring" or cfg.name == "rust"))
     )
     block_type: BlockType = "method" if is_method else "function"
     end_line = _end_line(bounds)
@@ -227,29 +292,24 @@ def _emit_callable(
             docstring=docstring,
         )
     )
-    # Never descend into function/method bodies: no nested-function noise.
-
-
-# --- walk -------------------------------------------------------------------------
 
 
 def _walk(
     node: Node,
     class_chain: str,
     ctx: _WalkContext,
-    pending_jsdoc: Node | None = None,
+    pending_comment: Node | None = None,
     *,
     bounds: Node | None = None,
 ) -> None:
-    """Depth-first walk; *bounds* overrides the emitted span (decorator wrappers)."""
     ntype = node.type
     cfg = ctx.config
 
     if ntype == _EXPORT_STATEMENT:
-        jsdoc = pending_jsdoc or _attached_jsdoc(ctx, node, None)
+        _, doc_node = _attached_comment(ctx, node, pending_comment)
         declaration = node.child_by_field_name("declaration")
         if declaration is not None:
-            _walk(declaration, class_chain, ctx, jsdoc)
+            _walk(declaration, class_chain, ctx, doc_node)
         else:
             for child in node.named_children:
                 _walk(child, class_chain, ctx)
@@ -258,26 +318,16 @@ def _walk(
     if ntype in cfg.decorated_wrapper_types:
         inner = node.child_by_field_name("definition")
         if inner is not None:
-            # Wrapper bounds keep decorator lines inside the emitted code span.
             _walk(inner, class_chain, ctx, bounds=node)
         return
 
     if ntype in cfg.class_node_types:
-        _emit_class(node, bounds or node, class_chain, ctx, pending_jsdoc)
+        _emit_class(node, bounds or node, class_chain, ctx, pending_comment)
         return
 
-    if ntype in cfg.function_node_types:
+    if ntype in cfg.function_node_types or ntype in cfg.method_node_types:
         _emit_callable(
-            node, bounds=bounds or node, class_chain=class_chain, ctx=ctx, jsdoc=pending_jsdoc
-        )
-        return
-
-    if ntype in cfg.method_node_types:
-        if node.child_by_field_name("body") is None:
-            # Overload / abstract signatures have no implementation to index.
-            return
-        _emit_callable(
-            node, bounds=bounds or node, class_chain=class_chain, ctx=ctx, jsdoc=pending_jsdoc
+            node, bounds=bounds or node, class_chain=class_chain, ctx=ctx, comment_node=pending_comment
         )
         return
 

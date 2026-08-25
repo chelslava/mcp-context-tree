@@ -39,6 +39,10 @@ dependencies = [
     "tree-sitter-javascript>=0.25.0",
     "chromadb>=1.5.9",
     "sentence-transformers>=6.0.0",
+    "tree-sitter-go>=0.25.0",
+    "tree-sitter-rust>=0.24.2",
+    "tree-sitter-c-sharp>=0.23.5",
+    "tree-sitter-java>=0.23.5",
 ]
 
 [project.scripts]

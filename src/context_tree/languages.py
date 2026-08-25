@@ -10,7 +10,7 @@ from typing import Literal
 
 from tree_sitter import Language, Parser
 
-DocstringStyle = Literal["python_docstring", "jsdoc_comment"]
+DocstringStyle = Literal["python_docstring", "jsdoc_comment", "prefix_comment"]
 
 
 def _load_python() -> Language:
@@ -37,14 +37,33 @@ def _load_javascript() -> Language:
     return Language(tree_sitter_javascript.language())
 
 
+def _load_go() -> Language:
+    import tree_sitter_go
+
+    return Language(tree_sitter_go.language())
+
+
+def _load_rust() -> Language:
+    import tree_sitter_rust
+
+    return Language(tree_sitter_rust.language())
+
+
+def _load_c_sharp() -> Language:
+    import tree_sitter_c_sharp
+
+    return Language(tree_sitter_c_sharp.language())
+
+
+def _load_java() -> Language:
+    import tree_sitter_java
+
+    return Language(tree_sitter_java.language())
+
+
 @dataclass(frozen=True)
 class LanguageConfig:
-    """Declarative description of one supported language for AST extraction.
-
-    Node-type tuples follow the concrete grammar node names; they are consumed by
-    ``extractor`` to decide what counts as a logical block and how docstrings are
-    attached (see ARCHITECTURE.md §4.3-§4.4).
-    """
+    """Declarative description of one supported language for AST extraction."""
 
     name: str
     extensions: tuple[str, ...]
@@ -100,9 +119,55 @@ JAVASCRIPT = LanguageConfig(
     docstring_style="jsdoc_comment",
 )
 
+GO = LanguageConfig(
+    name="go",
+    extensions=(".go",),
+    language_loader=_load_go,
+    function_node_types=("function_declaration",),
+    method_node_types=("method_declaration",),
+    class_node_types=("type_declaration",),
+    decorated_wrapper_types=(),
+    docstring_style="prefix_comment",
+)
+
+RUST = LanguageConfig(
+    name="rust",
+    extensions=(".rs",),
+    language_loader=_load_rust,
+    function_node_types=("function_item",),
+    method_node_types=(),
+    class_node_types=("struct_item", "trait_item", "impl_item"),
+    decorated_wrapper_types=(),
+    docstring_style="prefix_comment",
+)
+
+CSHARP = LanguageConfig(
+    name="c_sharp",
+    extensions=(".cs",),
+    language_loader=_load_c_sharp,
+    function_node_types=("local_function_statement",),
+    method_node_types=("method_declaration", "constructor_declaration"),
+    class_node_types=("class_declaration", "interface_declaration", "struct_declaration"),
+    decorated_wrapper_types=(),
+    docstring_style="prefix_comment",
+)
+
+JAVA = LanguageConfig(
+    name="java",
+    extensions=(".java",),
+    language_loader=_load_java,
+    function_node_types=(),
+    method_node_types=("method_declaration", "constructor_declaration"),
+    class_node_types=("class_declaration", "interface_declaration", "record_declaration"),
+    decorated_wrapper_types=(),
+    docstring_style="jsdoc_comment",
+)
+
+ALL_LANGUAGES = (PYTHON, TYPESCRIPT, TSX, JAVASCRIPT, GO, RUST, CSHARP, JAVA)
+
 EXTENSION_TO_CONFIG: dict[str, LanguageConfig] = {
     ext.lower(): config
-    for config in (PYTHON, TYPESCRIPT, TSX, JAVASCRIPT)
+    for config in ALL_LANGUAGES
     for ext in config.extensions
 }
 
@@ -115,7 +180,7 @@ def get_language_config(path: str | PurePath) -> LanguageConfig | None:
 
 def iter_language_configs() -> Iterator[LanguageConfig]:
     """Iterate over every supported language exactly once."""
-    yield from (PYTHON, TYPESCRIPT, TSX, JAVASCRIPT)
+    yield from ALL_LANGUAGES
 
 
 @cache
