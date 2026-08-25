@@ -43,7 +43,13 @@ def _matches_target(callee_text: str, target: str) -> bool:
 
 
 def _find_calls_in_node(
-    node: Node, source: bytes, target: str, rel_path: str, hits: list[UsageHit], lines: list[str], max_hits: int
+    node: Node,
+    source: bytes,
+    target: str,
+    rel_path: str,
+    hits: list[UsageHit],
+    lines: list[str],
+    max_hits: int,
 ) -> None:
     if len(hits) >= max_hits:
         return
@@ -54,7 +60,9 @@ def _find_calls_in_node(
     if ntype in ("call", "call_expression"):
         func_node = node.child_by_field_name("function")
         if func_node is not None:
-            callee_text = source[func_node.start_byte : func_node.end_byte].decode("utf-8", errors="replace")
+            callee_text = source[func_node.start_byte : func_node.end_byte].decode(
+                "utf-8", errors="replace"
+            )
             if _matches_target(callee_text, target):
                 line_idx = node.start_point[0]
                 line_no = line_idx + 1
@@ -65,9 +73,7 @@ def _find_calls_in_node(
         _find_calls_in_node(child, source, target, rel_path, hits, lines, max_hits)
 
 
-def find_ast_usages(
-    root: Path | str, symbol_name: str, max_hits: int = 50
-) -> list[UsageHit]:
+def find_ast_usages(root: Path | str, symbol_name: str, max_hits: int = 50) -> list[UsageHit]:
     """Find real call sites of *symbol_name* across all supported files in workspace."""
     root_path = Path(root).resolve()
     candidates = discover_files(root_path)

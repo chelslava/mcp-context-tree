@@ -94,9 +94,7 @@ def semantic_search(
         class_chain = str(meta.get("class", ""))
         name = str(meta.get("name", ""))
 
-        code = read_snippet_from_disk(
-            root_path, rel_file, start_line, end_line, hit.document
-        )
+        code = read_snippet_from_disk(root_path, rel_file, start_line, end_line, hit.document)
 
         results.append(
             SearchResult(

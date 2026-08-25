@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from context_tree.state import (
-    DiffResult,
     FileMeta,
     IndexState,
     compute_file_meta,
@@ -93,6 +91,6 @@ def test_diff_state_fast_path_when_unchanged(tmp_path: Path) -> None:
     old_state = IndexState(files={"f1.py": meta1})
     candidates = {"f1.py": f1}
 
-    diff, new_state = diff_state(candidates, old_state)
+    diff, _new_state = diff_state(candidates, old_state)
     assert diff.unchanged == ["f1.py"]
     assert diff.has_changes is False

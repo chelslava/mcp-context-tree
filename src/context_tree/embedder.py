@@ -9,7 +9,8 @@ Implements ARCHITECTURE.md §6:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Sequence
+from collections.abc import Sequence
+from typing import TYPE_CHECKING
 
 from context_tree.config import EMBEDDING_BATCH_SIZE, EMBEDDING_MODEL_NAME
 

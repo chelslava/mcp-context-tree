@@ -9,12 +9,13 @@ Implements ARCHITECTURE.md §4.2:
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import os
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Mapping
 
 
 @dataclass
@@ -108,10 +109,8 @@ def save_state_atomic(state: IndexState, state_file: Path) -> None:
         temp_file.replace(state_file)
     except Exception:
         if temp_file.exists():
-            try:
+            with contextlib.suppress(OSError):
                 temp_file.unlink()
-            except OSError:
-                pass
         raise
 
 

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from context_tree.chunker import (
-    Chunk,
     build_base_id,
     chunk_block,
     chunk_blocks,
@@ -14,9 +13,17 @@ from context_tree.extractor import CodeBlock
 
 
 def test_build_base_id() -> None:
-    assert build_base_id("src/api/auth.py", "login", "AuthService") == "src/api/auth.py::AuthService::login"
-    assert build_base_id("src/models/tree.py", "prune", "Outer::Inner") == "src/models/tree.py::Outer::Inner::prune"
-    assert build_base_id("src/utils/hash.py", "compute_digest") == "src/utils/hash.py::compute_digest"
+    assert (
+        build_base_id("src/api/auth.py", "login", "AuthService")
+        == "src/api/auth.py::AuthService::login"
+    )
+    assert (
+        build_base_id("src/models/tree.py", "prune", "Outer::Inner")
+        == "src/models/tree.py::Outer::Inner::prune"
+    )
+    assert (
+        build_base_id("src/utils/hash.py", "compute_digest") == "src/utils/hash.py::compute_digest"
+    )
 
 
 def test_render_document() -> None:
@@ -43,11 +50,7 @@ def test_render_document_module_level_without_docstring() -> None:
         name="helper",
         code="def helper(): return 1",
     )
-    expected = (
-        "File: src/utils.py\n"
-        "Method: helper\n"
-        "Code:\ndef helper(): return 1"
-    )
+    expected = "File: src/utils.py\nMethod: helper\nCode:\ndef helper(): return 1"
     assert doc == expected
 
 
@@ -79,7 +82,9 @@ def test_chunk_normal_block() -> None:
 
 
 def test_chunk_oversized_block() -> None:
-    long_code = "\n".join(f"    line_{i} = {i} * 2  # extensive calculation step" for i in range(150))
+    long_code = "\n".join(
+        f"    line_{i} = {i} * 2  # extensive calculation step" for i in range(150)
+    )
     block = CodeBlock(
         file="src/big.py",
         language="python",

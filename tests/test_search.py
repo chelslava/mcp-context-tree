@@ -16,11 +16,11 @@ def test_semantic_search_empty_store(tmp_path: Path) -> None:
 def test_semantic_search_live_snippet(tmp_path: Path) -> None:
     src_file = tmp_path / "auth.py"
     src_content = (
-        'def authenticate_user(username, password):\n'
+        "def authenticate_user(username, password):\n"
         '    """Verify user credentials and grant access."""\n'
-        '    if not username or not password:\n'
-        '        return False\n'
-        '    return True\n'
+        "    if not username or not password:\n"
+        "        return False\n"
+        "    return True\n"
     )
     src_file.write_text(src_content, encoding="utf-8")
 

@@ -12,7 +12,6 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Mapping
 
 from context_tree.chunker import Chunk, chunk_blocks
 from context_tree.config import (
@@ -132,9 +131,7 @@ class Indexer:
         # Embed and upsert new chunks
         if new_chunks:
             documents = [c.document for c in new_chunks]
-            embeddings = self.embedder.encode(
-                documents, batch_size=EMBEDDING_BATCH_SIZE
-            )
+            embeddings = self.embedder.encode(documents, batch_size=EMBEDDING_BATCH_SIZE)
             self.store.upsert(new_chunks, embeddings)
 
         # Atomically commit new state

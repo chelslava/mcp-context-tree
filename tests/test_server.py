@@ -27,9 +27,9 @@ async def test_server_tool_calls(tmp_path: Path) -> None:
     # Create dummy source file
     code_file = tmp_path / "app.py"
     code_content = (
-        'def login_service(username, password):\n'
+        "def login_service(username, password):\n"
         '    """Handle user authentication and login."""\n'
-        '    return True\n'
+        "    return True\n"
     )
     code_file.write_text(code_content, encoding="utf-8")
 

@@ -8,9 +8,10 @@ Implements ARCHITECTURE.md §7:
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 
 import chromadb
 from chromadb.api.models.Collection import Collection
@@ -32,9 +33,7 @@ class SearchHit:
 class VectorStore:
     """Wrapper around persistent ChromaDB client."""
 
-    def __init__(
-        self, chroma_dir: Path | str, collection_name: str = COLLECTION_NAME
-    ) -> None:
+    def __init__(self, chroma_dir: Path | str, collection_name: str = COLLECTION_NAME) -> None:
         self.chroma_dir = Path(chroma_dir)
         self.collection_name = collection_name
         self.chroma_dir.mkdir(parents=True, exist_ok=True)
@@ -48,9 +47,7 @@ class VectorStore:
         """Return the number of items in the collection."""
         return self.collection.count()
 
-    def upsert(
-        self, chunks: Sequence[Chunk], embeddings: Sequence[Sequence[float]]
-    ) -> None:
+    def upsert(self, chunks: Sequence[Chunk], embeddings: Sequence[Sequence[float]]) -> None:
         """Insert or update chunks with their precomputed embeddings."""
         if not chunks:
             return
@@ -74,9 +71,7 @@ class VectorStore:
         for file_path in files:
             self.collection.delete(where={"file": file_path})
 
-    def query(
-        self, query_embedding: Sequence[float], limit: int = 5
-    ) -> list[SearchHit]:
+    def query(self, query_embedding: Sequence[float], limit: int = 5) -> list[SearchHit]:
         """Query top-k most similar records by cosine similarity."""
         if self.count() == 0:
             return []

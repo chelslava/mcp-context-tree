@@ -73,9 +73,7 @@ def create_server() -> MCPServer:
         async with _MUTEX:
             target = Path(directory_path).resolve()
             results = do_semantic_search(target, query, limit=limit)
-            return json.dumps(
-                {"results": [r.to_dict() for r in results]}, indent=2
-            )
+            return json.dumps({"results": [r.to_dict() for r in results]}, indent=2)
 
     @app.tool(
         description=(
