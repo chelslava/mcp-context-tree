@@ -1,0 +1,8 @@
+{
+  "mcp": {
+    "context-tree": {
+      "command": "uv",
+      "args": ["run", "--directory", "./mcp-context-tree", "context-tree"]
+    }
+  }
+}

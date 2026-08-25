@@ -1,132 +1,82 @@
 # ContextTree MCP 🌳
 
-**Deep semantic code search for AI assistants — powered by AST parsing and local embeddings. 100% offline.**
+**Deep semantic & hybrid code search for AI assistants — powered by AST parsing and local embeddings. 100% offline.**
 
 [![Python](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![MCP](https://img.shields.io/badge/protocol-Model%20Context%20Protocol-purple.svg)](https://modelcontextprotocol.io)
 [![README (RU)](https://img.shields.io/badge/README-Русский-red.svg)](README.ru.md)
 
-ContextTree MCP is a local [Model Context Protocol](https://modelcontextprotocol.io) server that gives your AI coding assistant **structural understanding** of a codebase. It combines two worlds:
+ContextTree MCP is a local [Model Context Protocol](https://modelcontextprotocol.io) server that gives your AI coding assistant **structural understanding** of a codebase. It combines three powerful pillars:
 
-- **tree-sitter** parses source files into an AST and extracts *logical blocks* — functions, methods, class signatures with docstrings.
-- **sentence-transformers** (`all-MiniLM-L6-v2`) embeds each block — enriched with file path, class name, method name and docstring — into a local **ChromaDB** vector store.
-
-The result: your assistant finds code by *meaning*, not by keywords, and every search hit comes back with exact file path and line numbers.
+- **tree-sitter** parses source files into an AST and extracts *logical blocks* — functions, methods, and class/struct signatures with docstrings.
+- **Hybrid Search (BM25 + Dense Vectors with Reciprocal Rank Fusion)** — combines exact keyword/identifier matches (`camelCase`, `snake_case`) with dense vector embeddings (`sentence-transformers/all-MiniLM-L6-v2` in ChromaDB).
+- **Watch Mode & Incremental Indexing** — SHA-256 hash change detection and asynchronous filesystem watcher for instant updates on save.
 
 > 🔒 **Privacy first.** Everything runs on your machine: parsing, embedding model, vector index. No cloud calls, no telemetry, no code ever leaves the disk it lives on.
 
 ---
 
-## Why not plain text search?
+## Supported Languages
 
-`grep` and full-text search match strings. They fail exactly where developers need help most:
-
-| Task | Text search | ContextTree MCP |
+| Language | Extensions | AST Units Indexed |
 |---|---|---|
-| *"Where do we validate JWT tokens?"* | ❌ needs exact keyword guessing | ✅ matches `AuthService.verify_token()` even if "validate" never appears in code |
-| Find a method whose name was refactored | ❌ broken by rename | ✅ docstring + surrounding context still carry the meaning |
-| Distinguish definition vs. usage | ❌ impossible without regex gymnastics | ✅ AST-level separation of declarations and call sites |
-| Return precise locations | ⚠️ line of match only | ✅ `file`, `class`, `method`, `start_line`, `end_line` metadata |
-| Ignore comments / strings / imports noise | ❌ | ✅ only real logical units are indexed |
+| **Python** | `.py` | functions, decorated functions, methods, class signatures & PEP-257 docs |
+| **TypeScript / TSX** | `.ts`, `.tsx`, `.mts`, `.cts` | functions, methods, class signatures & JSDoc |
+| **JavaScript / JSX** | `.js`, `.jsx`, `.mjs`, `.cjs` | functions, methods, class signatures & JSDoc |
+| **Go** | `.go` | functions, receiver methods, struct/interface types & comments |
+| **Rust** | `.rs` | functions, impl methods, struct & trait signatures, `///` docs |
+| **C#** | `.cs` | methods, constructors, class & interface signatures, `/// <summary>` XML-docs |
+| **Java** | `.java` | methods, constructors, class, interface & record signatures, Javadoc |
 
-## Features
+---
 
-- 🌲 **AST-aware chunking** — indexes functions, methods and class signatures via tree-sitter, not arbitrary text windows.
-- 🧩 **Context-Enriched Logical Blocks** — every indexed document embeds its file path, owning class, method name, docstring and body, so queries like *"payment retry logic"* hit the right method.
-- ⚡ **Incremental indexing** — SHA-256 content hashes per file; only changed/new/deleted files are reprocessed.
-- 🔍 **Semantic search** — natural-language query → ranked code fragments with exact line ranges.
-- 📞 **AST usage lookup** — find real call sites of any symbol (function or class), filtered from false positives like string literals or comments.
-- 🗄️ **Persistent local index** — ChromaDB stored in `.chroma/`, survives restarts, never committed to Git.
-- 🔌 **Stdio MCP transport** — plugs into Claude Desktop, OpenCode, Cursor, Cline, or any MCP-compatible client.
+## Installation & Quick Start
 
-## Tech stack
-
-| Layer | Technology |
-|---|---|
-| Language | Python 3.12+ |
-| Protocol | Official [`mcp`](https://pypi.org/project/mcp/) SDK (stdio transport) |
-| AST parsing | [`tree-sitter`](https://tree-sitter.github.io/) + bindings for Python, TypeScript, JavaScript |
-| Vector database | [`chromadb`](https://www.trychroma.com/) (local persistent mode) |
-| Embeddings | [`sentence-transformers`](https://www.sbert.net/) · `all-MiniLM-L6-v2` |
-
-## Installation
-
-Requires Python **3.12+**. [`uv`](https://docs.astral.sh/uv/) is recommended as a fast, modern package manager:
+Requires Python **3.12+**. [`uv`](https://docs.astral.sh/uv/) is recommended:
 
 ```bash
-git clone https://github.com/<your-org>/mcp-context-tree.git
+git clone https://github.com/chelslava/mcp-context-tree.git
 cd mcp-context-tree
-
-# Option A — uv (recommended): resolves dependencies from pyproject.toml, locks uv.lock
 uv sync
-
-# Option B — classic pip + venv
-python -m venv venv && source venv/bin/activate   # Windows: venv\Scripts\activate
-pip install -r requirements.txt
 ```
 
-> 💡 First run downloads the embedding model (~90 MB). PyTorch is installed as a dependency of `sentence-transformers`; CPU build is sufficient — no GPU required.
+### Running the Server
 
-### Registering with an MCP client
+```bash
+# Standard stdio server (for MCP clients)
+uv run context-tree
 
-Example configuration (Claude Desktop / any client supporting stdio servers):
+# Watch mode (monitors directory and incrementally indexes on save)
+uv run context-tree --watch /path/to/project
+```
+
+### Registering with MCP Clients
+
+Example configuration (`claude_desktop_config.json` or Antigravity / Cursor configs):
 
 ```json
 {
   "mcpServers": {
     "context-tree": {
-      "command": "<path-to-venv>/bin/python",
-      "args": ["-m", "context_tree"],
-      "env": {}
+      "command": "uv",
+      "args": ["run", "--directory", "D:/Repo/mcp-context-tree", "context-tree"]
     }
   }
 }
 ```
 
-*(On Windows use `<path-to-venv>\Scripts\python.exe`.)*
+---
 
-## Tools exposed to the assistant
+## Tools Exposed to Assistant
 
-| Tool | Signature | Description |
+| Tool | Parameters | Description |
 |---|---|---|
-| `index_workspace` | `(directory_path: str)` | Walks the project, detects changed files by hash, incrementally updates the ChromaDB collection. |
-| `semantic_search` | `(query: str, limit: int = 5)` | Natural-language search over indexed code. Returns enriched snippets with `file`, `class`, `start_line`, `end_line`. |
-| `find_ast_usages` | `(symbol_name: str)` | AST-based lookup of real call sites / instantiations of a function or class. |
+| `index_workspace` | `(directory_path: str = ".")` | Scans workspace, diffs against index state, incrementally indexes changed files. |
+| `semantic_search` | `(query: str, limit: int = 5, mode: str = "hybrid")` | Hybrid (BM25 + vectors), semantic-only, or keyword search. Returns exact line snippets. |
+| `find_ast_usages` | `(symbol_name: str, limit: int = 50)` | AST lookup of real call sites / instantiations (filters out string literals & comments). |
 
-Typical workflow:
-
-```
-1. index_workspace("D:/projects/my-app")
-2. semantic_search("where do we handle payment retries", limit=8)
-3. find_ast_usages("PaymentGateway.retry")
-```
-
-## Supported languages
-
-| Language | Status |
-|---|---|
-| Python | ✅ supported at launch |
-| TypeScript / TSX | ✅ supported at launch |
-| JavaScript / JSX | ✅ supported at launch |
-| Go, Java, Rust… | 🗺️ roadmap — parser registry is designed for extension |
-
-## Documentation
-
-- 🏛️ [ARCHITECTURE.md](ARCHITECTURE.md) — project layout, ChromaDB data schema, AST extraction logic, incremental indexing design.
-- 🇷🇺 [README.ru.md](README.ru.md) — документация на русском языке.
-
-## Roadmap
-
-- [ ] Watch mode — automatic re-indexing on file change (fs watcher)
-- [ ] More languages via tree-sitter bindings
-- [ ] Hybrid search (BM25 + vectors rerank)
-- [ ] Call-graph aware ranking ("who calls this?")
-- [ ] PyPI release (`context-tree-mcp`)
-
-## Contributing
-
-Issues and PRs are welcome. Please keep changes consistent with [ARCHITECTURE.md](ARCHITECTURE.md).
+---
 
 ## License
 

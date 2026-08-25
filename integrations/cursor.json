@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "context-tree": {
+      "command": "uv",
+      "args": ["run", "--directory", "${workspaceRoot}/mcp-context-tree", "context-tree"]
+    }
+  }
+}
