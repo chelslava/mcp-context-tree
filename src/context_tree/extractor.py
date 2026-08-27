@@ -313,11 +313,47 @@ def _walk(
         _, doc_node = _attached_comment(ctx, node, pending_comment)
         declaration = node.child_by_field_name("declaration")
         if declaration is not None:
-            _walk(declaration, class_chain, ctx, doc_node)
+            _walk(declaration, class_chain, ctx, doc_node, bounds=node)
         else:
             for child in node.named_children:
                 _walk(child, class_chain, ctx)
         return
+
+    if cfg.name in ("typescript", "tsx", "javascript") and ntype in (
+        "lexical_declaration",
+        "variable_declaration",
+    ):
+        doc, doc_node = _attached_comment(ctx, bounds or node, pending_comment)
+        has_arrow_or_fn = False
+        for decl in node.named_children:
+            if decl.type == "variable_declarator":
+                val = decl.child_by_field_name("value")
+                if val is not None and val.type in ("arrow_function", "function_expression"):
+                    name = _field_text(ctx.source, decl, "name")
+                    if name:
+                        has_arrow_or_fn = True
+                        stmt_bounds = bounds or node
+                        start_line = (
+                            _start_line(doc_node)
+                            if doc_node is not None
+                            else _start_line(stmt_bounds)
+                        )
+                        end_line = _end_line(stmt_bounds)
+                        ctx.blocks.append(
+                            CodeBlock(
+                                file=ctx.file,
+                                language=cfg.name,
+                                block_type="function",
+                                name=name,
+                                class_chain=class_chain,
+                                start_line=start_line,
+                                end_line=end_line,
+                                code=ctx.slice_lines(start_line, end_line),
+                                docstring=doc,
+                            )
+                        )
+        if has_arrow_or_fn:
+            return
 
     if ntype in cfg.decorated_wrapper_types:
         inner = node.child_by_field_name("definition")

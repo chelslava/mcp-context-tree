@@ -137,7 +137,7 @@ def test_typescript_golden_fixture(tmp_path: Path) -> None:
 
     blocks = extract_blocks(source_path, root=tmp_path)
 
-    assert len(blocks) == 5
+    assert len(blocks) == 6
 
     svc = _find(blocks, "Svc")
     assert svc.block_type == "class_signature"
@@ -162,8 +162,68 @@ def test_typescript_golden_fixture(tmp_path: Path) -> None:
     gen = _find(blocks, "gen")
     assert gen.block_type == "function"
     assert gen.start_line == 11
-    # Arrow functions are out of v0.1 granularity (ARCHITECTURE.md §4.4).
-    assert not [b for b in blocks if b.name == "arrow"]
+
+    arrow = _find(blocks, "arrow")
+    assert arrow.block_type == "function"
+    assert arrow.start_line == 13
+
+
+def test_arrow_functions_and_expressions(tmp_path: Path) -> None:
+    ts_source = """\
+/** Adds two numbers */
+export const calculateTotal = (a: number, b: number): number => {
+    return a + b;
+};
+
+/** Handles incoming requests */
+const handleRequest = async (req: Request, res: Response) => {
+    return true;
+};
+
+export const fnExpr = function(x: number) { return x; };
+"""
+    source_path = _write(tmp_path, "arrows.ts", ts_source)
+    blocks = extract_blocks(source_path, root=tmp_path)
+    assert len(blocks) == 3
+
+    calc = _find(blocks, "calculateTotal")
+    assert calc.block_type == "function"
+    assert calc.docstring == "/** Adds two numbers */"
+    assert calc.start_line == 1
+    assert calc.end_line == 4
+
+    req = _find(blocks, "handleRequest")
+    assert req.block_type == "function"
+    assert req.docstring == "/** Handles incoming requests */"
+    assert req.start_line == 6
+    assert req.end_line == 9
+
+    fn_expr = _find(blocks, "fnExpr")
+    assert fn_expr.block_type == "function"
+    assert fn_expr.start_line == 11
+
+
+def test_tsx_react_functional_component(tmp_path: Path) -> None:
+    tsx_source = """\
+import React from 'react';
+
+interface Props { user: { name: string } }
+
+/** User profile component */
+export const UserProfile: React.FC<Props> = ({ user }) => {
+    return <div>{user.name}</div>;
+};
+"""
+    source_path = _write(tmp_path, "UserProfile.tsx", tsx_source)
+    blocks = extract_blocks(source_path, root=tmp_path)
+    assert len(blocks) == 1
+
+    profile = _find(blocks, "UserProfile")
+    assert profile.block_type == "function"
+    assert profile.language == "tsx"
+    assert profile.docstring == "/** User profile component */"
+    assert profile.start_line == 5
+    assert profile.end_line == 8
 
 
 def test_jsx_routed_to_javascript_grammar(tmp_path: Path) -> None:
