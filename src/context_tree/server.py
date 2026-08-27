@@ -15,6 +15,7 @@ from pathlib import Path
 
 from mcp.server import MCPServer
 
+from context_tree import __version__
 from context_tree.config import DEFAULT_SEARCH_LIMIT
 from context_tree.indexer import Indexer
 from context_tree.search import SearchMode
@@ -29,7 +30,7 @@ _MUTEX = asyncio.Lock()
 
 def create_server() -> MCPServer:
     """Create and configure the ContextTree MCP server instance."""
-    app = MCPServer("context-tree", version="0.2.0")
+    app = MCPServer("context-tree", version=__version__)
 
     @app.tool(
         description=(
