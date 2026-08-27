@@ -202,6 +202,11 @@ class Indexer:
         # Atomically commit new state
         save_state_atomic(new_state, self.state_file)
 
+        # Invalidate cached in-memory BM25 index
+        from context_tree.search import invalidate_bm25_cache
+
+        invalidate_bm25_cache(self.root)
+
         return IndexStats(
             added=len(diff.added),
             modified=len(diff.modified),
