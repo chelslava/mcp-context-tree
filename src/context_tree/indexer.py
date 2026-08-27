@@ -9,6 +9,7 @@ Implements ARCHITECTURE.md §4.1, §4.2, and §8:
 
 from __future__ import annotations
 
+import fnmatch
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -41,23 +42,91 @@ class IndexStats:
     total_in_store: int
 
 
+def _load_gitignore_patterns(gitignore_path: Path) -> list[str]:
+    """Load non-empty, non-comment patterns from a .gitignore file."""
+    if not gitignore_path.is_file():
+        return []
+    try:
+        content = gitignore_path.read_text(encoding="utf-8", errors="replace")
+        patterns: list[str] = []
+        for line in content.splitlines():
+            line = line.strip()
+            if line and not line.startswith("#"):
+                patterns.append(line)
+        return patterns
+    except OSError:
+        return []
+
+
+def _is_gitignored(rel_posix: str, patterns: list[str]) -> bool:
+    """Check if relative posix path matches any gitignore pattern."""
+    norm_path = rel_posix.strip("/")
+    parts = norm_path.split("/")
+    filename = parts[-1] if parts else ""
+
+    for pat in patterns:
+        negated = False
+        if pat.startswith("!"):
+            negated = True
+            pat = pat[1:]
+
+        is_dir_pat = pat.endswith("/")
+        clean_pat = pat.rstrip("/")
+
+        if is_dir_pat:
+            if any(fnmatch.fnmatch(p, clean_pat) for p in parts):
+                return not negated
+            if fnmatch.fnmatch(norm_path, f"*{clean_pat}/*") or fnmatch.fnmatch(
+                norm_path, f"{clean_pat}/*"
+            ):
+                return not negated
+        else:
+            if fnmatch.fnmatch(norm_path, pat) or fnmatch.fnmatch(filename, pat):
+                return not negated
+            if any(fnmatch.fnmatch(p, pat) for p in parts):
+                return not negated
+
+    return False
+
+
 def discover_files(root: Path) -> dict[str, Path]:
     """Recursively discover indexable source files in *root*.
 
-    Respects IGNORED_DIRS, extension allow-list, size limit, and binary sniff.
+    Respects IGNORED_DIRS, .gitignore patterns, extension allow-list, size limit,
+    and binary sniff.
     Returns mapping: relative_posix_path -> absolute Path.
     """
     candidates: dict[str, Path] = {}
     root_resolved = root.resolve()
+    gitignore_patterns = _load_gitignore_patterns(root_resolved / ".gitignore")
 
     for dirpath, dirnames, filenames in os.walk(root_resolved):
         # Filter ignored directories in-place to prevent descending
-        dirnames[:] = [d for d in dirnames if d not in IGNORED_DIRS]
+        dirnames[:] = [
+            d
+            for d in dirnames
+            if d not in IGNORED_DIRS
+            and not (
+                gitignore_patterns
+                and _is_gitignored(
+                    (Path(dirpath).resolve().relative_to(root_resolved) / d).as_posix() + "/",
+                    gitignore_patterns,
+                )
+            )
+        ]
 
         dir_path = Path(dirpath)
         for fname in filenames:
             file_path = dir_path / fname
             if get_language_config(file_path) is None:
+                continue
+
+            try:
+                rel_posix = file_path.relative_to(root_resolved).as_posix()
+            except ValueError:
+                continue
+
+            if gitignore_patterns and _is_gitignored(rel_posix, gitignore_patterns):
                 continue
 
             try:
@@ -72,11 +141,7 @@ def discover_files(root: Path) -> dict[str, Path]:
             except OSError:
                 continue
 
-            try:
-                rel_posix = file_path.relative_to(root_resolved).as_posix()
-                candidates[rel_posix] = file_path
-            except ValueError:
-                pass
+            candidates[rel_posix] = file_path
 
     return candidates
 
