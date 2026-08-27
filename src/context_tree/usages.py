@@ -35,11 +35,12 @@ class UsageHit:
 
 def _matches_target(callee_text: str, target: str) -> bool:
     """Check if callee expression matches bare or dotted target."""
-    callee = callee_text.strip()
-    if "." in target:
-        return callee.endswith(f".{target.split('.')[-1]}") or callee == target
+    callee_norm = callee_text.strip().replace("::", ".")
+    target_norm = target.strip().replace("::", ".")
+    if "." in target_norm:
+        return callee_norm == target_norm or callee_norm.endswith(f".{target_norm}")
     else:
-        return callee == target or callee.endswith(f".{target}")
+        return callee_norm == target_norm or callee_norm.endswith(f".{target_norm}")
 
 
 def _find_calls_in_node(
@@ -55,19 +56,36 @@ def _find_calls_in_node(
         return
 
     ntype = node.type
+    callee_text: str | None = None
 
-    # Python call node or JS/TS call_expression
-    if ntype in ("call", "call_expression"):
+    # Python call node, JS/TS/Go/Rust call_expression, C# invocation_expression
+    if ntype in ("call", "call_expression", "invocation_expression"):
         func_node = node.child_by_field_name("function")
         if func_node is not None:
             callee_text = source[func_node.start_byte : func_node.end_byte].decode(
                 "utf-8", errors="replace"
             )
-            if _matches_target(callee_text, target):
-                line_idx = node.start_point[0]
-                line_no = line_idx + 1
-                preview = lines[line_idx].strip() if line_idx < len(lines) else callee_text
-                hits.append(UsageHit(file=rel_path, line=line_no, preview=preview))
+    elif ntype == "method_invocation":
+        # Java method invocation: [object.]name(args)
+        name_node = node.child_by_field_name("name")
+        if name_node is not None:
+            name_text = source[name_node.start_byte : name_node.end_byte].decode(
+                "utf-8", errors="replace"
+            )
+            object_node = node.child_by_field_name("object")
+            if object_node is not None:
+                object_text = source[object_node.start_byte : object_node.end_byte].decode(
+                    "utf-8", errors="replace"
+                )
+                callee_text = f"{object_text}.{name_text}"
+            else:
+                callee_text = name_text
+
+    if callee_text is not None and _matches_target(callee_text, target):
+        line_idx = node.start_point[0]
+        line_no = line_idx + 1
+        preview = lines[line_idx].strip() if line_idx < len(lines) else callee_text
+        hits.append(UsageHit(file=rel_path, line=line_no, preview=preview))
 
     for child in node.named_children:
         _find_calls_in_node(child, source, target, rel_path, hits, lines, max_hits)
