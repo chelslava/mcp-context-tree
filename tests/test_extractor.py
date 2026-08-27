@@ -418,3 +418,106 @@ public class AccountManager {
     deposit = _find(blocks, "deposit", chain="AccountManager")
     assert deposit.block_type == "method"
     assert "Deposit funds" in deposit.docstring
+
+
+def test_c_golden_fixture(tmp_path: Path) -> None:
+    c_source = """\
+/** Compute sum */
+int add(int a, int b) {
+    return a + b;
+}
+
+/** User model */
+struct User {
+    int id;
+};
+"""
+    source_path = _write(tmp_path, "calc.c", c_source)
+    blocks = extract_blocks(source_path, root=tmp_path)
+    assert len(blocks) == 2
+
+    add_fn = _find(blocks, "add")
+    assert add_fn.block_type == "function"
+    assert add_fn.language == "c"
+    assert "Compute sum" in add_fn.docstring
+
+    user_st = _find(blocks, "User")
+    assert user_st.block_type == "class_signature"
+    assert user_st.language == "c"
+    assert "User model" in user_st.docstring
+
+
+def test_cpp_golden_fixture(tmp_path: Path) -> None:
+    cpp_source = """\
+namespace App {
+    /** Database manager */
+    class Database {
+    public:
+        /** Connect to database */
+        void* connect(const char* url) {
+            return 0;
+        }
+    };
+}
+"""
+    source_path = _write(tmp_path, "db.cpp", cpp_source)
+    blocks = extract_blocks(source_path, root=tmp_path)
+    assert len(blocks) >= 2
+
+    db_class = _find(blocks, "Database", chain="App")
+    assert db_class.block_type == "class_signature"
+    assert db_class.language == "cpp"
+    assert "Database manager" in db_class.docstring
+
+    connect_fn = _find(blocks, "connect", chain="App::Database")
+    assert connect_fn.block_type == "method"
+    assert "Connect to database" in connect_fn.docstring
+
+
+def test_kotlin_golden_fixture(tmp_path: Path) -> None:
+    kt_source = """\
+/** User repository service */
+class UserService {
+    /** Find user by ID */
+    fun findUser(id: String): String {
+        return id
+    }
+}
+"""
+    source_path = _write(tmp_path, "User.kt", kt_source)
+    blocks = extract_blocks(source_path, root=tmp_path)
+    assert len(blocks) == 2
+
+    user_svc = _find(blocks, "UserService")
+    assert user_svc.block_type == "class_signature"
+    assert user_svc.language == "kotlin"
+    assert "User repository service" in user_svc.docstring
+
+    find_fn = _find(blocks, "findUser", chain="UserService")
+    assert find_fn.block_type == "method"
+    assert "Find user by ID" in find_fn.docstring
+
+
+def test_swift_golden_fixture(tmp_path: Path) -> None:
+    swift_source = """\
+/// Authentication service
+public class AuthService {
+    /// Verify authorization token
+    public func verifyToken(token: String) -> Bool {
+        return true
+    }
+}
+"""
+    source_path = _write(tmp_path, "Auth.swift", swift_source)
+    blocks = extract_blocks(source_path, root=tmp_path)
+    assert len(blocks) == 2
+
+    auth_svc = _find(blocks, "AuthService")
+    assert auth_svc.block_type == "class_signature"
+    assert auth_svc.language == "swift"
+    assert "Authentication service" in auth_svc.docstring
+
+    verify_fn = _find(blocks, "verifyToken", chain="AuthService")
+    assert verify_fn.block_type == "method"
+    assert "Verify authorization token" in verify_fn.docstring
+

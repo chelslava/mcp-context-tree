@@ -81,3 +81,27 @@ def test_bm25_index_cached_and_invalidated_on_reindex(tmp_path: Path, monkeypatc
     assert res4[0].name == "calculate_product"
     assert build_calls == 2
 
+
+def test_semantic_search_hybrid_call_graph_boost(tmp_path: Path) -> None:
+    src_file1 = tmp_path / "auth.py"
+    src_file1.write_text(
+        "def authenticate_user(u, p):\n    '''Verify user login'''\n    return True\n",
+        encoding="utf-8",
+    )
+
+    src_file2 = tmp_path / "app.py"
+    src_file2.write_text(
+        "def main():\n"
+        "    authenticate_user('a', 'b')\n"
+        "    authenticate_user('c', 'd')\n"
+        "    authenticate_user('e', 'f')\n",
+        encoding="utf-8",
+    )
+
+    indexer = Indexer(tmp_path)
+    indexer.index()
+
+    results = semantic_search(tmp_path, "authenticate user login", mode="hybrid", limit=2)
+    assert len(results) >= 1
+    assert results[0].name == "authenticate_user"
+    assert results[0].score > 0.0

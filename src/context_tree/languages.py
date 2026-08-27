@@ -61,6 +61,30 @@ def _load_java() -> Language:
     return Language(tree_sitter_java.language())
 
 
+def _load_c() -> Language:
+    import tree_sitter_c
+
+    return Language(tree_sitter_c.language())
+
+
+def _load_cpp() -> Language:
+    import tree_sitter_cpp
+
+    return Language(tree_sitter_cpp.language())
+
+
+def _load_kotlin() -> Language:
+    import tree_sitter_kotlin
+
+    return Language(tree_sitter_kotlin.language())
+
+
+def _load_swift() -> Language:
+    import tree_sitter_swift
+
+    return Language(tree_sitter_swift.language())
+
+
 @dataclass(frozen=True)
 class LanguageConfig:
     """Declarative description of one supported language for AST extraction."""
@@ -163,7 +187,56 @@ JAVA = LanguageConfig(
     docstring_style="jsdoc_comment",
 )
 
-ALL_LANGUAGES = (PYTHON, TYPESCRIPT, TSX, JAVASCRIPT, GO, RUST, CSHARP, JAVA)
+C = LanguageConfig(
+    name="c",
+    extensions=(".c", ".h"),
+    language_loader=_load_c,
+    function_node_types=("function_definition",),
+    method_node_types=(),
+    class_node_types=("struct_specifier", "union_specifier", "enum_specifier"),
+    decorated_wrapper_types=(),
+    docstring_style="prefix_comment",
+)
+
+CPP = LanguageConfig(
+    name="cpp",
+    extensions=(".cpp", ".hpp", ".cc", ".cxx", ".hh", ".hxx"),
+    language_loader=_load_cpp,
+    function_node_types=("function_definition",),
+    method_node_types=(),
+    class_node_types=("class_specifier", "struct_specifier", "namespace_definition"),
+    decorated_wrapper_types=(),
+    docstring_style="prefix_comment",
+)
+
+KOTLIN = LanguageConfig(
+    name="kotlin",
+    extensions=(".kt", ".kts"),
+    language_loader=_load_kotlin,
+    function_node_types=("function_declaration",),
+    method_node_types=(),
+    class_node_types=("class_declaration", "object_declaration"),
+    decorated_wrapper_types=(),
+    docstring_style="jsdoc_comment",
+)
+
+SWIFT = LanguageConfig(
+    name="swift",
+    extensions=(".swift",),
+    language_loader=_load_swift,
+    function_node_types=("function_declaration",),
+    method_node_types=(),
+    class_node_types=(
+        "class_declaration",
+        "struct_declaration",
+        "protocol_declaration",
+        "enum_declaration",
+    ),
+    decorated_wrapper_types=(),
+    docstring_style="prefix_comment",
+)
+
+ALL_LANGUAGES = (PYTHON, TYPESCRIPT, TSX, JAVASCRIPT, GO, RUST, CSHARP, JAVA, C, CPP, KOTLIN, SWIFT)
 
 EXTENSION_TO_CONFIG: dict[str, LanguageConfig] = {
     ext.lower(): config for config in ALL_LANGUAGES for ext in config.extensions

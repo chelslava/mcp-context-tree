@@ -22,12 +22,16 @@ ContextTree MCP is a local [Model Context Protocol](https://modelcontextprotocol
 | Language | Extensions | AST Units Indexed |
 |---|---|---|
 | **Python** | `.py` | functions, decorated functions, methods, class signatures & PEP-257 docs |
-| **TypeScript / TSX** | `.ts`, `.tsx`, `.mts`, `.cts` | functions, methods, class signatures & JSDoc |
-| **JavaScript / JSX** | `.js`, `.jsx`, `.mjs`, `.cjs` | functions, methods, class signatures & JSDoc |
+| **TypeScript / TSX** | `.ts`, `.tsx`, `.mts`, `.cts` | functions, arrow functions, methods, class signatures & JSDoc |
+| **JavaScript / JSX** | `.js`, `.jsx`, `.mjs`, `.cjs` | functions, arrow functions, methods, class signatures & JSDoc |
 | **Go** | `.go` | functions, receiver methods, struct/interface types & comments |
 | **Rust** | `.rs` | functions, impl methods, struct & trait signatures, `///` docs |
 | **C#** | `.cs` | methods, constructors, class & interface signatures, `/// <summary>` XML-docs |
 | **Java** | `.java` | methods, constructors, class, interface & record signatures, Javadoc |
+| **C** | `.c`, `.h` | functions, struct/union/enum declarations & doc comments |
+| **C++** | `.cpp`, `.hpp`, `.cc`, `.cxx`, `.hh`, `.hxx` | functions, methods, classes, structs, namespaces & doc comments |
+| **Kotlin** | `.kt`, `.kts` | functions, classes, objects, member methods & KDoc |
+| **Swift** | `.swift` | functions, methods, classes, structs, protocols, enums & Swift docs |
 
 ---
 

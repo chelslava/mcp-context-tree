@@ -23,6 +23,10 @@ tree-sitter-go>=0.25.0
 tree-sitter-rust>=0.24.2
 tree-sitter-c-sharp>=0.23.5
 tree-sitter-java>=0.23.5
+tree-sitter-c>=0.24.2
+tree-sitter-cpp>=0.23.4
+tree-sitter-kotlin>=1.1.0
+tree-sitter-swift>=0.7.3
 
 # --- Vector store & embeddings (100% local) ---
 chromadb>=1.5.9

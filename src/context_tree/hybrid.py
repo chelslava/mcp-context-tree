@@ -147,9 +147,11 @@ def reciprocal_rank_fusion(
     k: int = 60,
     w_vec: float = 1.0,
     w_bm25: float = 1.0,
+    w_graph: float = 0.5,
+    graph_ranks: dict[str, int] | None = None,
     limit: int = 5,
 ) -> list[SearchHit]:
-    """Fuse vector and BM25 ranked hits using Reciprocal Rank Fusion (RRF)."""
+    """Fuse vector, BM25, and optional call-graph ranked hits using Reciprocal Rank Fusion (RRF)."""
     scores: dict[str, float] = {}
     hit_map: dict[str, SearchHit] = {}
 
@@ -161,6 +163,11 @@ def reciprocal_rank_fusion(
         scores[hit.id] = scores.get(hit.id, 0.0) + (w_bm25 / (k + rank))
         if hit.id not in hit_map:
             hit_map[hit.id] = hit
+
+    if graph_ranks and w_graph > 0.0:
+        for doc_id, g_rank in graph_ranks.items():
+            if doc_id in scores:
+                scores[doc_id] += w_graph / (k + g_rank)
 
     ranked_ids = sorted(scores.keys(), key=lambda doc_id: scores[doc_id], reverse=True)
     fused: list[SearchHit] = []

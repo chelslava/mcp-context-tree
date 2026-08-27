@@ -208,6 +208,11 @@ def _emit_class(
         return
 
     body = class_node.child_by_field_name("body")
+    if body is None:
+        for child in class_node.named_children:
+            if child.type in ("class_body", "field_declaration_list", "declaration_list", "block"):
+                body = child
+                break
     docstring = ""
     start_line = _start_line(span_start)
 
@@ -244,6 +249,39 @@ def _emit_class(
             _walk(child, nested_chain, ctx)
 
 
+def _extract_callable_name(source: bytes, node: Node, lang_name: str) -> str:
+    name = _field_text(source, node, "name")
+    if name:
+        return name
+
+    if lang_name in ("c", "cpp"):
+        decl = node.child_by_field_name("declarator")
+        if decl is not None:
+            while decl is not None and decl.type in (
+                "function_declarator",
+                "pointer_declarator",
+                "reference_declarator",
+                "parenthesized_declarator",
+            ):
+                inner = decl.child_by_field_name("declarator")
+                if inner is not None:
+                    decl = inner
+                else:
+                    for child in decl.children:
+                        if child.type in (
+                            "identifier",
+                            "field_identifier",
+                            "destructor_name",
+                            "qualified_identifier",
+                        ):
+                            return _node_text(source, child)
+                    break
+            if decl is not None:
+                return _node_text(source, decl)
+
+    return ""
+
+
 def _emit_callable(
     definition: Node,
     *,
@@ -253,7 +291,7 @@ def _emit_callable(
     comment_node: Node | None,
 ) -> None:
     cfg = ctx.config
-    name = _field_text(ctx.source, definition, "name")
+    name = _extract_callable_name(ctx.source, definition, cfg.name)
     if not name:
         return
 
@@ -278,7 +316,13 @@ def _emit_callable(
 
     is_method = bool(
         definition.type in cfg.method_node_types
-        or (class_chain and (cfg.docstring_style == "python_docstring" or cfg.name == "rust"))
+        or (
+            class_chain
+            and (
+                cfg.docstring_style == "python_docstring"
+                or cfg.name in ("rust", "cpp", "c_sharp", "kotlin", "swift", "go")
+            )
+        )
     )
     block_type: BlockType = "method" if is_method else "function"
     end_line = _end_line(bounds)

@@ -115,3 +115,39 @@ def test_find_ast_usages_rust(tmp_path: Path) -> None:
     assert len(hits_scoped) == 1
     assert hits_scoped[0].line == 2
 
+
+def test_find_ast_usages_c_cpp(tmp_path: Path) -> None:
+    c_file = tmp_path / "main.c"
+    c_file.write_text("void run() {\n    add(1, 2);\n    calc.add(3, 4);\n}\n", encoding="utf-8")
+
+    cpp_file = tmp_path / "app.cpp"
+    cpp_file.write_text("void exec() {\n    App::add(5, 6);\n}\n", encoding="utf-8")
+
+    hits = find_ast_usages(tmp_path, "add")
+    assert len(hits) == 3
+
+    hits_scoped = find_ast_usages(tmp_path, "App::add")
+    assert len(hits_scoped) == 1
+    assert hits_scoped[0].file == "app.cpp"
+
+
+def test_find_ast_usages_kotlin_swift(tmp_path: Path) -> None:
+    kt_file = tmp_path / "App.kt"
+    kt_file.write_text(
+        "fun run() {\n    service.findUser(1)\n    findUser(2)\n}\n",
+        encoding="utf-8",
+    )
+
+    swift_file = tmp_path / "App.swift"
+    swift_file.write_text(
+        "func run() {\n    service.findUser(3)\n}\n",
+        encoding="utf-8",
+    )
+
+    hits_bare = find_ast_usages(tmp_path, "findUser")
+    assert len(hits_bare) == 3
+
+    hits_dotted = find_ast_usages(tmp_path, "service.findUser")
+    assert len(hits_dotted) == 2
+
+

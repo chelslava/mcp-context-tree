@@ -58,9 +58,20 @@ def _find_calls_in_node(
     ntype = node.type
     callee_text: str | None = None
 
-    # Python call node, JS/TS/Go/Rust call_expression, C# invocation_expression
+    # Python call node, JS/TS/Go/Rust/C/CPP/Kotlin/Swift call_expression, C# invocation_expression
     if ntype in ("call", "call_expression", "invocation_expression"):
         func_node = node.child_by_field_name("function")
+        if func_node is None and node.named_children:
+            first = node.named_children[0]
+            if first.type in (
+                "navigation_expression",
+                "simple_identifier",
+                "identifier",
+                "field_expression",
+                "scoped_identifier",
+                "user_type",
+            ):
+                func_node = first
         if func_node is not None:
             callee_text = source[func_node.start_byte : func_node.end_byte].decode(
                 "utf-8", errors="replace"

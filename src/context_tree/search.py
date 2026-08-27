@@ -128,7 +128,28 @@ def semantic_search(
         bm25 = get_or_build_bm25(root_path, vstore)
         bm25_hits = bm25.query(query, limit=max(limit * 2, 10))
 
-        hits = reciprocal_rank_fusion(vec_hits, bm25_hits, limit=limit)
+        # Compute call-graph ranks for candidate pool based on AST usage frequency
+        from context_tree.usages import find_ast_usages
+
+        candidates = {h.id: h for h in list(vec_hits) + list(bm25_hits)}
+        symbol_counts: dict[str, int] = {}
+        for h in candidates.values():
+            sym_name = str(h.metadata.get("name", ""))
+            if sym_name and sym_name not in symbol_counts:
+                symbol_counts[sym_name] = len(find_ast_usages(root_path, sym_name, max_hits=50))
+
+        sorted_by_usage = sorted(
+            candidates.keys(),
+            key=lambda doc_id: symbol_counts.get(
+                str(candidates[doc_id].metadata.get("name", "")), 0
+            ),
+            reverse=True,
+        )
+        graph_ranks = {doc_id: rank for rank, doc_id in enumerate(sorted_by_usage, start=1)}
+
+        hits = reciprocal_rank_fusion(
+            vec_hits, bm25_hits, graph_ranks=graph_ranks, limit=limit
+        )
 
     results: list[SearchResult] = []
     for hit in hits:
