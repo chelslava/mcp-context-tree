@@ -330,7 +330,7 @@ func (s *Server) Start() error {
 
 
 def test_rust_golden_fixture(tmp_path: Path) -> None:
-    rs_source = """\\
+    rs_source = """\
 /// Global worker function.
 pub fn worker() -> i32 {
     42
@@ -362,7 +362,7 @@ impl Engine {
 
 
 def test_csharp_golden_fixture(tmp_path: Path) -> None:
-    cs_source = """\\
+    cs_source = """\
 namespace Demo;
 
 /// <summary>
@@ -392,7 +392,7 @@ public class AuthService {
 
 
 def test_java_golden_fixture(tmp_path: Path) -> None:
-    java_source = """\\
+    java_source = """\
 package com.demo;
 
 /**
