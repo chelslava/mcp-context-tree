@@ -7,7 +7,11 @@ import asyncio
 import sys
 from pathlib import Path
 
-from context_tree.server import run_stdio_server
+from context_tree.server import (
+    run_sse_server,
+    run_stdio_server,
+    run_streamable_http_server,
+)
 from context_tree.watcher import watch_workspace
 
 
@@ -23,6 +27,23 @@ def main() -> None:
         const=".",
         metavar="PATH",
         help="Run in watch mode: monitor directory and incrementally re-index on change.",
+    )
+    parser.add_argument(
+        "--transport",
+        choices=["stdio", "sse", "streamable-http"],
+        default="stdio",
+        help="MCP transport protocol (default: stdio).",
+    )
+    parser.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="Host to bind for SSE / HTTP transport (default: 127.0.0.1).",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8000,
+        help="Port to bind for SSE / HTTP transport (default: 8000).",
     )
 
     args = parser.parse_args()
@@ -45,7 +66,12 @@ def main() -> None:
             sys.exit(0)
     else:
         try:
-            asyncio.run(run_stdio_server())
+            if args.transport == "sse":
+                asyncio.run(run_sse_server(host=args.host, port=args.port))
+            elif args.transport == "streamable-http":
+                asyncio.run(run_streamable_http_server(host=args.host, port=args.port))
+            else:
+                asyncio.run(run_stdio_server())
         except KeyboardInterrupt:
             sys.exit(0)
 

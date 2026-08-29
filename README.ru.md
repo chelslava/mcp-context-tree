@@ -50,6 +50,9 @@ uv sync
 # Режим MCP-сервера (stdio)
 uv run context-tree
 
+# Режим сетевого сервера (SSE HTTP transport)
+uv run context-tree --transport sse --port 8000
+
 # Режим наблюдения (автоматическая переиндексация при изменении файлов)
 uv run context-tree --watch /путь/к/проекту
 ```
@@ -74,8 +77,9 @@ uv run context-tree --watch /путь/к/проекту
 | Инструмент | Параметры | Описание |
 |---|---|---|
 | `index_workspace` | `(directory_path: str = ".")` | Сканирование и инкрементальная индексация изменённых файлов. |
-| `semantic_search` | `(query: str, limit: int = 5, mode: str = "hybrid")` | Гибридный (BM25 + vectors), семантический или ключевой поиск со сниппетами с диска. |
+| `semantic_search` | `(query: str, limit: int = 5, mode: str = "hybrid", rerank: bool = False)` | Гибридный (BM25 + vectors + graph), семантический или ключевой поиск с опциональным Cross-Encoder реранкингом. |
 | `find_ast_usages` | `(symbol_name: str, limit: int = 50)` | Поиск реальных вызовов символа через AST (без ложных срабатываний в строках). |
+| `go_to_definition` | `(symbol_name: str, limit: int = 20)` | Точный переход к определению/декларации символа в AST по всей рабочей области. |
 
 ---
 

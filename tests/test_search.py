@@ -1,10 +1,13 @@
-"""Tests for semantic search and live snippet resolution."""
+"""Tests for semantic search, live snippet resolution, and cross-encoder re-ranking."""
 
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import MagicMock
 
+from context_tree.hybrid import BM25Index
 from context_tree.indexer import Indexer
+from context_tree.reranker import ReRanker
 from context_tree.search import semantic_search
 
 
@@ -38,8 +41,6 @@ def test_semantic_search_live_snippet(tmp_path: Path) -> None:
 
 
 def test_bm25_index_cached_and_invalidated_on_reindex(tmp_path: Path, monkeypatch) -> None:
-    from context_tree.hybrid import BM25Index
-
     src_file = tmp_path / "calc.py"
     src_file.write_text("def calculate_sum(a, b):\n    return a + b\n", encoding="utf-8")
 
@@ -105,3 +106,32 @@ def test_semantic_search_hybrid_call_graph_boost(tmp_path: Path) -> None:
     assert len(results) >= 1
     assert results[0].name == "authenticate_user"
     assert results[0].score > 0.0
+
+
+def test_semantic_search_with_rerank(tmp_path: Path, monkeypatch) -> None:
+    src_file1 = tmp_path / "calc.py"
+    src_file1.write_text("def add(a, b): return a + b\n", encoding="utf-8")
+
+    src_file2 = tmp_path / "math_utils.py"
+    src_file2.write_text("def multiply(a, b): return a * b\n", encoding="utf-8")
+
+    indexer = Indexer(tmp_path)
+    indexer.index()
+
+    # Mock reranker predict to boost multiply
+    orig_init = ReRanker.__init__
+
+    def mock_init(self, *args, **kwargs):
+        orig_init(self, *args, **kwargs)
+        mock_model = MagicMock()
+        mock_model.predict.side_effect = lambda pairs: [
+            0.99 if "multiply" in p[1] else 0.1 for p in pairs
+        ]
+        self._model = mock_model
+
+    monkeypatch.setattr(ReRanker, "__init__", mock_init)
+
+    results = semantic_search(tmp_path, "compute result", mode="hybrid", limit=2, rerank=True)
+    assert len(results) >= 2
+    assert results[0].name == "multiply"
+    assert results[0].score == 0.99

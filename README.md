@@ -51,6 +51,9 @@ uv sync
 # Standard stdio server (for MCP clients)
 uv run context-tree
 
+# SSE HTTP transport (for remote or containerized clients)
+uv run context-tree --transport sse --port 8000
+
 # Watch mode (monitors directory and incrementally indexes on save)
 uv run context-tree --watch /path/to/project
 ```
@@ -77,8 +80,9 @@ Example configuration (`claude_desktop_config.json` or Antigravity / Cursor conf
 | Tool | Parameters | Description |
 |---|---|---|
 | `index_workspace` | `(directory_path: str = ".")` | Scans workspace, diffs against index state, incrementally indexes changed files. |
-| `semantic_search` | `(query: str, limit: int = 5, mode: str = "hybrid")` | Hybrid (BM25 + vectors), semantic-only, or keyword search. Returns exact line snippets. |
+| `semantic_search` | `(query: str, limit: int = 5, mode: str = "hybrid", rerank: bool = False)` | Hybrid (BM25 + vectors + graph), semantic, or keyword search with optional cross-encoder reranking. |
 | `find_ast_usages` | `(symbol_name: str, limit: int = 50)` | AST lookup of real call sites / instantiations (filters out string literals & comments). |
+| `go_to_definition` | `(symbol_name: str, limit: int = 20)` | Precise AST definition/declaration lookup for functions, methods, classes, structs across workspace. |
 
 ---
 

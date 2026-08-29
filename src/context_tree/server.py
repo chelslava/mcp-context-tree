@@ -64,7 +64,7 @@ def create_server() -> MCPServer:
         description=(
             "Search code by meaning and keywords (hybrid BM25+vectors, semantic, or keyword). "
             "Returns ranked code fragments with exact file, class, method, start_line, end_line, "
-            "and code snippets."
+            "and code snippets. Supports optional Cross-Encoder re-ranking (rerank=True)."
         )
     )
     async def semantic_search(
@@ -72,11 +72,14 @@ def create_server() -> MCPServer:
         directory_path: str = ".",
         limit: int = DEFAULT_SEARCH_LIMIT,
         mode: SearchMode = "hybrid",
+        rerank: bool = False,
     ) -> str:
-        """Search code using hybrid, semantic, or keyword matching."""
+        """Search code using hybrid, semantic, or keyword matching with optional reranking."""
         async with _MUTEX:
             target = Path(directory_path).resolve()
-            results = do_semantic_search(target, query, limit=limit, mode=mode)
+            results = do_semantic_search(
+                target, query, limit=limit, mode=mode, rerank=rerank
+            )
             return json.dumps({"results": [r.to_dict() for r in results]}, indent=2)
 
     @app.tool(
@@ -96,6 +99,25 @@ def create_server() -> MCPServer:
             hits = do_find_ast_usages(target, symbol_name, max_hits=limit)
             return json.dumps({"usages": [h.to_dict() for h in hits]}, indent=2)
 
+    @app.tool(
+        description=(
+            "Finds the exact definition/declaration location of a symbol (function, "
+            "method, class, struct, trait, interface) across workspace files."
+        )
+    )
+    async def go_to_definition(
+        symbol_name: str,
+        directory_path: str = ".",
+        limit: int = 20,
+    ) -> str:
+        """Find exact AST declaration sites of a symbol across the workspace."""
+        async with _MUTEX:
+            target = Path(directory_path).resolve()
+            from context_tree.definitions import find_symbol_definitions
+
+            hits = find_symbol_definitions(target, symbol_name, max_hits=limit)
+            return json.dumps({"definitions": [h.to_dict() for h in hits]}, indent=2)
+
     return app
 
 
@@ -103,3 +125,17 @@ async def run_stdio_server() -> None:
     """Run the ContextTree MCP server over stdio."""
     app = create_server()
     await app.run_stdio_async()
+
+
+async def run_sse_server(host: str = "127.0.0.1", port: int = 8000) -> None:
+    """Run the ContextTree MCP server over SSE (Server-Sent Events) HTTP transport."""
+    app = create_server()
+    logger.info("Starting ContextTree MCP SSE server on %s:%d", host, port)
+    await app.run_sse_async(host=host, port=port)
+
+
+async def run_streamable_http_server(host: str = "127.0.0.1", port: int = 8000) -> None:
+    """Run the ContextTree MCP server over Streamable HTTP transport."""
+    app = create_server()
+    logger.info("Starting ContextTree MCP Streamable HTTP server on %s:%d", host, port)
+    await app.run_streamable_http_async(host=host, port=port)

@@ -101,6 +101,7 @@ def semantic_search(
     mode: SearchMode = "hybrid",
     store: VectorStore | None = None,
     embedder: Embedder | None = None,
+    rerank: bool = False,
 ) -> list[SearchResult]:
     """Execute code search (hybrid BM25+RRF, semantic, or keyword) over workspace."""
     root_path = Path(root).resolve()
@@ -113,20 +114,23 @@ def semantic_search(
     emb = embedder or Embedder()
     hits: list[SearchHit] = []
 
+    # If rerank is enabled, fetch more initial candidates to rerank
+    candidate_limit = max(limit * 3, 15) if rerank else limit
+
     if mode == "semantic":
         q_vec = emb.encode_single(query)
-        hits = vstore.query(q_vec, limit=limit)
+        hits = vstore.query(q_vec, limit=candidate_limit)
 
     elif mode == "keyword":
         bm25 = get_or_build_bm25(root_path, vstore)
-        hits = bm25.query(query, limit=limit)
+        hits = bm25.query(query, limit=candidate_limit)
 
     else:  # hybrid
         q_vec = emb.encode_single(query)
-        vec_hits = vstore.query(q_vec, limit=max(limit * 2, 10))
+        vec_hits = vstore.query(q_vec, limit=max(candidate_limit * 2, 10))
 
         bm25 = get_or_build_bm25(root_path, vstore)
-        bm25_hits = bm25.query(query, limit=max(limit * 2, 10))
+        bm25_hits = bm25.query(query, limit=max(candidate_limit * 2, 10))
 
         # Compute call-graph ranks for candidate pool based on AST usage frequency
         from context_tree.usages import find_ast_usages
@@ -148,8 +152,14 @@ def semantic_search(
         graph_ranks = {doc_id: rank for rank, doc_id in enumerate(sorted_by_usage, start=1)}
 
         hits = reciprocal_rank_fusion(
-            vec_hits, bm25_hits, graph_ranks=graph_ranks, limit=limit
+            vec_hits, bm25_hits, graph_ranks=graph_ranks, limit=candidate_limit
         )
+
+    if rerank and hits:
+        from context_tree.reranker import ReRanker
+
+        reranker = ReRanker()
+        hits = reranker.rerank(query, hits, limit=limit)
 
     results: list[SearchResult] = []
     for hit in hits:
