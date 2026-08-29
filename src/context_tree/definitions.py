@@ -54,9 +54,8 @@ def _matches_target(block: CodeBlock, target: str) -> bool:
         if block.name == parts[-1] and block.class_chain:
             expected_class = ".".join(parts[:-1])
             block_class_norm = block.class_chain.replace("::", ".")
-            if (
-                block_class_norm == expected_class
-                or block_class_norm.endswith(f".{expected_class}")
+            if block_class_norm == expected_class or block_class_norm.endswith(
+                f".{expected_class}"
             ):
                 return True
         return False

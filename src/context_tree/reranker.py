@@ -22,11 +22,7 @@ class ReRanker:
     """Lazy-loaded Cross-Encoder re-ranker for search candidates."""
 
     def __init__(self, model_name: str | None = None) -> None:
-        self.model_name = (
-            model_name
-            or os.environ.get(ENV_RERANKER_MODEL)
-            or DEFAULT_RERANKER_MODEL
-        )
+        self.model_name = model_name or os.environ.get(ENV_RERANKER_MODEL) or DEFAULT_RERANKER_MODEL
         self._model: CrossEncoder | None = None
 
     @property
@@ -37,9 +33,7 @@ class ReRanker:
             self._model = CrossEncoder(self.model_name)
         return self._model
 
-    def rerank(
-        self, query: str, hits: list[SearchHit], limit: int = 5
-    ) -> list[SearchHit]:
+    def rerank(self, query: str, hits: list[SearchHit], limit: int = 5) -> list[SearchHit]:
         """Score candidate hits with cross-encoder and return top ranked hits."""
         if not hits or not query.strip():
             return hits[:limit]

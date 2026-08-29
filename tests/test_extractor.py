@@ -520,4 +520,3 @@ public class AuthService {
     verify_fn = _find(blocks, "verifyToken", chain="AuthService")
     assert verify_fn.block_type == "method"
     assert "Verify authorization token" in verify_fn.docstring
-

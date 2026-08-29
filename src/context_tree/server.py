@@ -77,9 +77,7 @@ def create_server() -> MCPServer:
         """Search code using hybrid, semantic, or keyword matching with optional reranking."""
         async with _MUTEX:
             target = Path(directory_path).resolve()
-            results = do_semantic_search(
-                target, query, limit=limit, mode=mode, rerank=rerank
-            )
+            results = do_semantic_search(target, query, limit=limit, mode=mode, rerank=rerank)
             return json.dumps({"results": [r.to_dict() for r in results]}, indent=2)
 
     @app.tool(

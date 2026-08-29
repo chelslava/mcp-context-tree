@@ -72,4 +72,3 @@ def test_reciprocal_rank_fusion_with_graph_ranks() -> None:
         vec_hits, bm25_hits, graph_ranks=graph_ranks, w_graph=2.0, limit=2
     )
     assert fused_graph[0].id == "doc2"
-

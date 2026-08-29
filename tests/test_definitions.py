@@ -59,7 +59,7 @@ def test_find_symbol_definitions_multi_language(tmp_path: Path) -> None:
     c_file.write_text("int compute(int x) { return x * 2; }\n", encoding="utf-8")
 
     kt_file = tmp_path / "User.kt"
-    kt_file.write_text("class UserRepo { fun getUser(): String = \"u\" }\n", encoding="utf-8")
+    kt_file.write_text('class UserRepo { fun getUser(): String = "u" }\n', encoding="utf-8")
 
     # C definition
     hits_c = find_symbol_definitions(tmp_path, "compute")

@@ -37,7 +37,7 @@ def test_find_ast_usages_dotted_name(tmp_path: Path) -> None:
         "def main():\n"
         '    AuthService.login("user", "pass")\n'
         '    PaymentService.login("user", "pass")\n'
-        '    other_call()\n'
+        "    other_call()\n"
     )
     py_file.write_text(py_content, encoding="utf-8")
 
@@ -52,8 +52,8 @@ def test_find_ast_usages_java(tmp_path: Path) -> None:
     java_content = (
         "class App {\n"
         "    void run() {\n"
-        "        AuthService.login(\"user\", \"pass\");\n"
-        "        PaymentService.login(\"user\", \"pass\");\n"
+        '        AuthService.login("user", "pass");\n'
+        '        PaymentService.login("user", "pass");\n'
         "        login();\n"
         "    }\n"
         "}\n"
@@ -76,8 +76,8 @@ def test_find_ast_usages_csharp(tmp_path: Path) -> None:
     cs_content = (
         "class App {\n"
         "    void Run() {\n"
-        "        AuthService.Login(\"user\", \"pass\");\n"
-        "        PaymentService.Login(\"user\", \"pass\");\n"
+        '        AuthService.Login("user", "pass");\n'
+        '        PaymentService.Login("user", "pass");\n'
         "        Login();\n"
         "    }\n"
         "}\n"
@@ -97,13 +97,7 @@ def test_find_ast_usages_csharp(tmp_path: Path) -> None:
 
 def test_find_ast_usages_rust(tmp_path: Path) -> None:
     rs_file = tmp_path / "main.rs"
-    rs_content = (
-        "fn run() {\n"
-        "    AuthModule::login();\n"
-        "    auth.login();\n"
-        "    login();\n"
-        "}\n"
-    )
+    rs_content = "fn run() {\n    AuthModule::login();\n    auth.login();\n    login();\n}\n"
     rs_file.write_text(rs_content, encoding="utf-8")
 
     # Bare lookup
@@ -149,5 +143,3 @@ def test_find_ast_usages_kotlin_swift(tmp_path: Path) -> None:
 
     hits_dotted = find_ast_usages(tmp_path, "service.findUser")
     assert len(hits_dotted) == 2
-
-

@@ -95,5 +95,3 @@ def test_cli_transport_args(monkeypatch) -> None:
     main()
     assert "sse" in called
     assert called["sse"][1]["port"] == 9000
-
-
