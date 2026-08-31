@@ -43,20 +43,9 @@ def _matches_target(callee_text: str, target: str) -> bool:
         return callee_norm == target_norm or callee_norm.endswith(f".{target_norm}")
 
 
-def _find_calls_in_node(
-    node: Node,
-    source: bytes,
-    target: str,
-    rel_path: str,
-    hits: list[UsageHit],
-    lines: list[str],
-    max_hits: int,
-) -> None:
-    if len(hits) >= max_hits:
-        return
-
+def _extract_callee_text(node: Node, source: bytes) -> str | None:
+    """Extract callee expression text from supported AST call nodes."""
     ntype = node.type
-    callee_text: str | None = None
 
     # Python call node, JS/TS/Go/Rust/C/CPP/Kotlin/Swift call_expression, C# invocation_expression
     if ntype in ("call", "call_expression", "invocation_expression"):
@@ -73,7 +62,7 @@ def _find_calls_in_node(
             ):
                 func_node = first
         if func_node is not None:
-            callee_text = source[func_node.start_byte : func_node.end_byte].decode(
+            return source[func_node.start_byte : func_node.end_byte].decode(
                 "utf-8", errors="replace"
             )
     elif ntype == "method_invocation":
@@ -88,10 +77,26 @@ def _find_calls_in_node(
                 object_text = source[object_node.start_byte : object_node.end_byte].decode(
                     "utf-8", errors="replace"
                 )
-                callee_text = f"{object_text}.{name_text}"
+                return f"{object_text}.{name_text}"
             else:
-                callee_text = name_text
+                return name_text
 
+    return None
+
+
+def _find_calls_in_node(
+    node: Node,
+    source: bytes,
+    target: str,
+    rel_path: str,
+    hits: list[UsageHit],
+    lines: list[str],
+    max_hits: int,
+) -> None:
+    if len(hits) >= max_hits:
+        return
+
+    callee_text = _extract_callee_text(node, source)
     if callee_text is not None and _matches_target(callee_text, target):
         line_idx = node.start_point[0]
         line_no = line_idx + 1
@@ -129,3 +134,71 @@ def find_ast_usages(root: Path | str, symbol_name: str, max_hits: int = 50) -> l
         )
 
     return hits
+
+
+def _batch_count_in_node(
+    node: Node,
+    source: bytes,
+    norm_to_symbols: dict[str, list[str]],
+    counts: dict[str, int],
+    max_hits_per_symbol: int,
+) -> None:
+    callee_text = _extract_callee_text(node, source)
+    if callee_text is not None:
+        callee_norm = callee_text.strip().replace("::", ".")
+        parts = callee_norm.split(".")
+        for i in range(len(parts)):
+            suffix = ".".join(parts[i:])
+            if suffix in norm_to_symbols:
+                for sym in norm_to_symbols[suffix]:
+                    if counts[sym] < max_hits_per_symbol:
+                        counts[sym] += 1
+
+    for child in node.named_children:
+        _batch_count_in_node(child, source, norm_to_symbols, counts, max_hits_per_symbol)
+
+
+def batch_count_ast_usages(
+    root: Path | str,
+    symbol_names: set[str] | list[str] | tuple[str, ...],
+    max_hits_per_symbol: int = 50,
+) -> dict[str, int]:
+    """Count AST call sites for multiple symbols in a single pass over workspace files.
+
+    Performs an $O(N)$ workspace scan across all candidate symbols simultaneously,
+    matching bare and qualified / dotted names without repeated disk I/O or AST parsing.
+    """
+    root_path = Path(root).resolve()
+    counts: dict[str, int] = {}
+    norm_to_symbols: dict[str, list[str]] = {}
+
+    for sym in symbol_names:
+        s = sym.strip()
+        if not s:
+            continue
+        counts[sym] = 0
+        norm = s.replace("::", ".")
+        norm_to_symbols.setdefault(norm, []).append(sym)
+
+    if not norm_to_symbols:
+        return counts
+
+    candidates = discover_files(root_path)
+
+    for _rel_path, abs_path in sorted(candidates.items()):
+        if all(counts[sym] >= max_hits_per_symbol for sym in counts):
+            break
+
+        parsed = parse_file(abs_path, root=root_path)
+        if parsed is None:
+            continue
+
+        _batch_count_in_node(
+            parsed.tree.root_node,
+            parsed.source,
+            norm_to_symbols,
+            counts,
+            max_hits_per_symbol,
+        )
+
+    return counts

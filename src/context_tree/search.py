@@ -133,19 +133,20 @@ def semantic_search(
         bm25_hits = bm25.query(query, limit=max(candidate_limit * 2, 10))
 
         # Compute call-graph ranks for candidate pool based on AST usage frequency
-        from context_tree.usages import find_ast_usages
+        from context_tree.usages import batch_count_ast_usages
 
         candidates = {h.id: h for h in list(vec_hits) + list(bm25_hits)}
-        symbol_counts: dict[str, int] = {}
-        for h in candidates.values():
-            sym_name = str(h.metadata.get("name", ""))
-            if sym_name and sym_name not in symbol_counts:
-                symbol_counts[sym_name] = len(find_ast_usages(root_path, sym_name, max_hits=50))
+        symbol_names = {
+            str(h.metadata.get("name", "")).strip()
+            for h in candidates.values()
+            if str(h.metadata.get("name", "")).strip()
+        }
+        symbol_counts = batch_count_ast_usages(root_path, symbol_names, max_hits_per_symbol=50)
 
         sorted_by_usage = sorted(
             candidates.keys(),
             key=lambda doc_id: symbol_counts.get(
-                str(candidates[doc_id].metadata.get("name", "")), 0
+                str(candidates[doc_id].metadata.get("name", "")).strip(), 0
             ),
             reverse=True,
         )

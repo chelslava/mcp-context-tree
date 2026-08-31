@@ -135,3 +135,37 @@ def test_semantic_search_with_rerank(tmp_path: Path, monkeypatch) -> None:
     assert len(results) >= 2
     assert results[0].name == "multiply"
     assert results[0].score == 0.99
+
+
+def test_semantic_search_hybrid_single_pass_ast_parsing(tmp_path: Path, monkeypatch) -> None:
+    for i in range(5):
+        f = tmp_path / f"service_{i}.py"
+        f.write_text(
+            f"def handle_request_{i}():\n"
+            f"    return {i}\n"
+            f"def call_all_{i}():\n"
+            + "\n".join(f"    handle_request_{j}()" for j in range(5))
+            + "\n",
+            encoding="utf-8",
+        )
+
+    indexer = Indexer(tmp_path)
+    indexer.index()
+
+    from context_tree import usages
+
+    parse_calls = 0
+    orig_parse = usages.parse_file
+
+    def counting_parse(abs_path, root=None):
+        nonlocal parse_calls
+        parse_calls += 1
+        return orig_parse(abs_path, root=root)
+
+    monkeypatch.setattr(usages, "parse_file", counting_parse)
+
+    # Hybrid search will have multiple candidates across the 5 files
+    results = semantic_search(tmp_path, "handle request", mode="hybrid", limit=5)
+    assert len(results) > 0
+    # Total workspace files is 5. Single pass should parse at most 5 files, NOT C * 5!
+    assert parse_calls <= 5

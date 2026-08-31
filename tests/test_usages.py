@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from context_tree.usages import find_ast_usages
+from context_tree.usages import batch_count_ast_usages, find_ast_usages
 
 
 def test_find_ast_usages_python_and_ts(tmp_path: Path) -> None:
@@ -143,3 +143,79 @@ def test_find_ast_usages_kotlin_swift(tmp_path: Path) -> None:
 
     hits_dotted = find_ast_usages(tmp_path, "service.findUser")
     assert len(hits_dotted) == 2
+
+
+def test_batch_count_ast_usages_multi_language(tmp_path: Path) -> None:
+    # Python
+    py_file = tmp_path / "app.py"
+    py_file.write_text(
+        "def main():\n"
+        '    verify_token("secret")\n'
+        '    service.verify_token("other")\n'
+        '    AuthService.login("u", "p")\n'
+        "    unrelated_call()\n",
+        encoding="utf-8",
+    )
+
+    # TypeScript
+    ts_file = tmp_path / "client.ts"
+    ts_file.write_text(
+        "function run() {\n    Auth.verify_token(123);\n    PaymentGateway.process();\n}\n",
+        encoding="utf-8",
+    )
+
+    # Rust
+    rs_file = tmp_path / "main.rs"
+    rs_file.write_text(
+        "fn run() {\n    AuthModule::login();\n    calc.add(1, 2);\n}\n",
+        encoding="utf-8",
+    )
+
+    symbols = [
+        "verify_token",
+        "Auth.verify_token",
+        "AuthService.login",
+        "login",
+        "AuthModule::login",
+        "process",
+        "PaymentGateway.process",
+        "add",
+        "non_existent_func",
+        "",
+        "   ",
+    ]
+
+    counts = batch_count_ast_usages(tmp_path, symbols)
+
+    assert counts["verify_token"] == 3
+    assert counts["Auth.verify_token"] == 1
+    assert counts["AuthService.login"] == 1
+    assert counts["login"] == 2  # AuthService.login and AuthModule::login
+    assert counts["AuthModule::login"] == 1
+    assert counts["process"] == 1
+    assert counts["PaymentGateway.process"] == 1
+    assert counts["add"] == 1
+    assert counts["non_existent_func"] == 0
+
+    # Verify that batch counts are 100% equivalent to individual find_ast_usages
+    for sym in ["verify_token", "AuthService.login", "login", "AuthModule::login", "process"]:
+        assert counts[sym] == len(find_ast_usages(tmp_path, sym))
+
+
+def test_batch_count_ast_usages_empty_and_limits(tmp_path: Path) -> None:
+    # Empty symbols collection
+    assert batch_count_ast_usages(tmp_path, []) == {}
+    assert batch_count_ast_usages(tmp_path, ["", "   "]) == {}
+
+    # Check max_hits_per_symbol limit
+    py_file = tmp_path / "repeated.py"
+    py_file.write_text(
+        "def test():\n" + "\n".join(f"    foo({i})" for i in range(100)),
+        encoding="utf-8",
+    )
+
+    counts_default = batch_count_ast_usages(tmp_path, ["foo"], max_hits_per_symbol=50)
+    assert counts_default["foo"] == 50
+
+    counts_custom = batch_count_ast_usages(tmp_path, ["foo"], max_hits_per_symbol=10)
+    assert counts_custom["foo"] == 10
