@@ -219,3 +219,74 @@ def test_batch_count_ast_usages_empty_and_limits(tmp_path: Path) -> None:
 
     counts_custom = batch_count_ast_usages(tmp_path, ["foo"], max_hits_per_symbol=10)
     assert counts_custom["foo"] == 10
+
+
+def test_find_ast_usages_pointer_dereference_c_cpp(tmp_path: Path) -> None:
+    c_file = tmp_path / "main.c"
+    c_file.write_text(
+        "void run() {\n    client->connect();\n    ptr->service->doWork(1);\n}\n",
+        encoding="utf-8",
+    )
+
+    cpp_file = tmp_path / "app.cpp"
+    cpp_file.write_text(
+        "void exec() {\n    m_client->connect();\n}\n",
+        encoding="utf-8",
+    )
+
+    hits_bare = find_ast_usages(tmp_path, "connect")
+    assert len(hits_bare) == 2
+    assert any(h.file == "main.c" and "client->connect" in h.preview for h in hits_bare)
+    assert any(h.file == "app.cpp" and "m_client->connect" in h.preview for h in hits_bare)
+
+    hits_scoped = find_ast_usages(tmp_path, "client->connect")
+    assert len(hits_scoped) == 1
+    assert hits_scoped[0].file == "main.c"
+
+    hits_dowork = find_ast_usages(tmp_path, "doWork")
+    assert len(hits_dowork) == 1
+
+
+def test_find_ast_usages_new_instantiations(tmp_path: Path) -> None:
+    # TS
+    ts_file = tmp_path / "client.ts"
+    ts_file.write_text(
+        "const s = new AuthService();\nconst s2 = new auth.AuthService();\n",
+        encoding="utf-8",
+    )
+
+    # Java
+    java_file = tmp_path / "App.java"
+    java_file.write_text(
+        "class App { void m() { AuthService s = new AuthService(); } }\n",
+        encoding="utf-8",
+    )
+
+    # C#
+    cs_file = tmp_path / "App.cs"
+    cs_file.write_text(
+        "class App { void M() { var s = new AuthService(); } }\n",
+        encoding="utf-8",
+    )
+
+    # C++
+    cpp_file = tmp_path / "main.cpp"
+    cpp_file.write_text(
+        "void m() { auto s = new AuthService(); }\n",
+        encoding="utf-8",
+    )
+
+    hits_bare = find_ast_usages(tmp_path, "AuthService")
+    assert len(hits_bare) == 5
+
+    hits_dotted = find_ast_usages(tmp_path, "auth.AuthService")
+    assert len(hits_dotted) == 1
+    assert hits_dotted[0].file == "client.ts"
+
+    # Batch test
+    batch_counts = batch_count_ast_usages(
+        tmp_path, ["AuthService", "auth.AuthService", "NonExistent"]
+    )
+    assert batch_counts["AuthService"] == 5
+    assert batch_counts["auth.AuthService"] == 1
+    assert batch_counts["NonExistent"] == 0

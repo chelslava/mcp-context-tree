@@ -35,8 +35,8 @@ class UsageHit:
 
 def _matches_target(callee_text: str, target: str) -> bool:
     """Check if callee expression matches bare or dotted target."""
-    callee_norm = callee_text.strip().replace("::", ".")
-    target_norm = target.strip().replace("::", ".")
+    callee_norm = callee_text.strip().replace("::", ".").replace("->", ".")
+    target_norm = target.strip().replace("::", ".").replace("->", ".")
     if "." in target_norm:
         return callee_norm == target_norm or callee_norm.endswith(f".{target_norm}")
     else:
@@ -44,7 +44,7 @@ def _matches_target(callee_text: str, target: str) -> bool:
 
 
 def _extract_callee_text(node: Node, source: bytes) -> str | None:
-    """Extract callee expression text from supported AST call nodes."""
+    """Extract callee expression text from supported AST call and instantiation nodes."""
     ntype = node.type
 
     # Python call node, JS/TS/Go/Rust/C/CPP/Kotlin/Swift call_expression, C# invocation_expression
@@ -80,6 +80,15 @@ def _extract_callee_text(node: Node, source: bytes) -> str | None:
                 return f"{object_text}.{name_text}"
             else:
                 return name_text
+    elif ntype in ("new_expression", "object_creation_expression"):
+        # JS/TS/C++ new_expression (constructor / type), Java/C# object_creation_expression (type)
+        target_node = node.child_by_field_name("constructor") or node.child_by_field_name("type")
+        if target_node is None and node.named_children:
+            target_node = node.named_children[0]
+        if target_node is not None:
+            return source[target_node.start_byte : target_node.end_byte].decode(
+                "utf-8", errors="replace"
+            )
 
     return None
 
@@ -145,7 +154,7 @@ def _batch_count_in_node(
 ) -> None:
     callee_text = _extract_callee_text(node, source)
     if callee_text is not None:
-        callee_norm = callee_text.strip().replace("::", ".")
+        callee_norm = callee_text.strip().replace("::", ".").replace("->", ".")
         parts = callee_norm.split(".")
         for i in range(len(parts)):
             suffix = ".".join(parts[i:])
@@ -177,7 +186,7 @@ def batch_count_ast_usages(
         if not s:
             continue
         counts[sym] = 0
-        norm = s.replace("::", ".")
+        norm = s.replace("::", ".").replace("->", ".")
         norm_to_symbols.setdefault(norm, []).append(sym)
 
     if not norm_to_symbols:
