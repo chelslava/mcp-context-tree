@@ -72,3 +72,49 @@ def test_find_symbol_definitions_multi_language(tmp_path: Path) -> None:
     assert len(hits_kt) == 1
     assert hits_kt[0].file == "User.kt"
     assert hits_kt[0].language == "kotlin"
+
+
+def test_find_symbol_definitions_indexed_fast_path(tmp_path: Path, monkeypatch) -> None:
+    py_file = tmp_path / "service.py"
+    py_content = (
+        "class PaymentService:\n    def process_payment(self, amount: int):\n        return True\n"
+    )
+    py_file.write_text(py_content, encoding="utf-8")
+
+    from context_tree.indexer import Indexer
+
+    indexer = Indexer(tmp_path)
+    indexer.index()
+
+    from context_tree import definitions
+
+    extract_calls = 0
+    orig_extract = definitions.extract_blocks
+
+    def counting_extract(*args, **kwargs):
+        nonlocal extract_calls
+        extract_calls += 1
+        return orig_extract(*args, **kwargs)
+
+    monkeypatch.setattr(definitions, "extract_blocks", counting_extract)
+
+    # 1. Bare lookup
+    hits = find_symbol_definitions(tmp_path, "process_payment")
+    assert len(hits) == 1
+    assert hits[0].file == "service.py"
+    assert hits[0].name == "process_payment"
+    assert hits[0].class_chain == "PaymentService"
+    assert "def process_payment" in hits[0].code
+    # extract_blocks should NOT be called since fast-path was used!
+    assert extract_calls == 0
+
+    # 2. Qualified lookup
+    hits_qualified = find_symbol_definitions(tmp_path, "PaymentService.process_payment")
+    assert len(hits_qualified) == 1
+    assert hits_qualified[0].name == "process_payment"
+    assert extract_calls == 0
+
+    # 3. Non-existent symbol
+    hits_none = find_symbol_definitions(tmp_path, "non_existent_symbol")
+    assert len(hits_none) == 0
+    assert extract_calls == 0
