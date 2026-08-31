@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "context-tree-mcp"
-version = "0.4.0"
+version = "0.4.1"
 description = "Local MCP server for deep semantic code search: tree-sitter AST chunking enriched with context, embedded into a local ChromaDB vector store."
 readme = "README.md"
 license = { text = "MIT" }

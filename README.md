@@ -8,7 +8,7 @@
 [![GitHub Release](https://img.shields.io/github/v/release/chelslava/mcp-context-tree?color=brightgreen&style=flat-square)](https://github.com/chelslava/mcp-context-tree/releases)
 [![Python Version](https://img.shields.io/badge/python-3.12%20%7C%203.13-blue?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![MCP Protocol](https://img.shields.io/badge/MCP-Protocol%20v2-purple?style=flat-square&logo=anthropic&logoColor=white)](https://modelcontextprotocol.io)
-[![Tests](https://img.shields.io/badge/tests-60%20passed-success?style=flat-square&logo=pytest&logoColor=white)](https://github.com/chelslava/mcp-context-tree/actions)
+[![Tests](https://img.shields.io/badge/tests-69%20passed-success?style=flat-square&logo=pytest&logoColor=white)](https://github.com/chelslava/mcp-context-tree/actions)
 [![Code Style](https://img.shields.io/badge/code%20style-ruff-000000?style=flat-square&logo=ruff&logoColor=white)](https://github.com/astral-sh/ruff)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](LICENSE)
 [![Privacy: 100% Offline](https://img.shields.io/badge/Privacy-100%25%20Offline-green?style=flat-square&logo=securityscorecard&logoColor=white)](#privacy--security)
