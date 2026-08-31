@@ -63,6 +63,21 @@ def test_discover_files_respects_gitignore(tmp_path: Path) -> None:
     assert len(candidates) == 1
 
 
+def test_discover_files_gitignore_ordering_and_negation(tmp_path: Path) -> None:
+    (tmp_path / "a.ts").write_text("export const a = 1;", encoding="utf-8")
+    (tmp_path / "b.ts").write_text("export const b = 2;", encoding="utf-8")
+    (tmp_path / "index.ts").write_text("export const index = 3;", encoding="utf-8")
+
+    # *.ts ignores all TypeScript files, but !index.ts re-includes index.ts
+    (tmp_path / ".gitignore").write_text("*.ts\n!index.ts\n", encoding="utf-8")
+
+    candidates = discover_files(tmp_path)
+    assert "index.ts" in candidates
+    assert "a.ts" not in candidates
+    assert "b.ts" not in candidates
+    assert len(candidates) == 1
+
+
 def test_indexer_incremental_scenarios(tmp_path: Path) -> None:
     f1 = tmp_path / "src" / "math.py"
     f1.parent.mkdir(parents=True)

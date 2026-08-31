@@ -59,11 +59,16 @@ def _load_gitignore_patterns(gitignore_path: Path) -> list[str]:
 
 
 def _is_gitignored(rel_posix: str, patterns: list[str]) -> bool:
-    """Check if relative posix path matches any gitignore pattern."""
+    """Check if relative posix path matches any gitignore pattern.
+
+    Rules are evaluated sequentially; subsequent rules override earlier ones
+    (e.g., negation '!file' re-includes a previously ignored file).
+    """
     norm_path = rel_posix.strip("/")
     parts = norm_path.split("/")
     filename = parts[-1] if parts else ""
 
+    ignored = False
     for pat in patterns:
         negated = False
         if pat.startswith("!"):
@@ -73,20 +78,24 @@ def _is_gitignored(rel_posix: str, patterns: list[str]) -> bool:
         is_dir_pat = pat.endswith("/")
         clean_pat = pat.rstrip("/")
 
+        matched = False
         if is_dir_pat:
-            if any(fnmatch.fnmatch(p, clean_pat) for p in parts):
-                return not negated
-            if fnmatch.fnmatch(norm_path, f"*{clean_pat}/*") or fnmatch.fnmatch(
-                norm_path, f"{clean_pat}/*"
-            ):
-                return not negated
+            matched = (
+                any(fnmatch.fnmatch(p, clean_pat) for p in parts)
+                or fnmatch.fnmatch(norm_path, f"*{clean_pat}/*")
+                or fnmatch.fnmatch(norm_path, f"{clean_pat}/*")
+            )
         else:
-            if fnmatch.fnmatch(norm_path, pat) or fnmatch.fnmatch(filename, pat):
-                return not negated
-            if any(fnmatch.fnmatch(p, pat) for p in parts):
-                return not negated
+            matched = (
+                fnmatch.fnmatch(norm_path, pat)
+                or fnmatch.fnmatch(filename, pat)
+                or any(fnmatch.fnmatch(p, pat) for p in parts)
+            )
 
-    return False
+        if matched:
+            ignored = not negated
+
+    return ignored
 
 
 def discover_files(root: Path) -> dict[str, Path]:
