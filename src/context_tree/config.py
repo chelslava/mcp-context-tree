@@ -51,3 +51,16 @@ IGNORED_DIRS: frozenset[str] = frozenset(
 
 # --- Search defaults ------------------------------------------------------------
 DEFAULT_SEARCH_LIMIT = 5
+
+# --- Language Server Protocol (LSP) Bridge --------------------------------------
+ENABLE_LSP = os.getenv("CONTEXT_TREE_ENABLE_LSP", "true").lower() in ("true", "1", "yes")
+DEFAULT_LSP_SERVERS: dict[str, list[str]] = {
+    "python": ["pyright-langserver", "--stdio"],
+    "typescript": ["typescript-language-server", "--stdio"],
+    "javascript": ["typescript-language-server", "--stdio"],
+    "go": ["gopls"],
+    "rust": ["rust-analyzer"],
+    "c": ["clangd"],
+    "cpp": ["clangd"],
+    "c_sharp": ["csharp-ls"],
+}
