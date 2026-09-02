@@ -44,8 +44,19 @@ def main() -> None:
         default=8000,
         help="Port to bind for SSE / HTTP transport (default: 8000).",
     )
+    parser.add_argument(
+        "--precision",
+        choices=["float32", "int8", "binary", "ubinary"],
+        default=None,
+        help="Embedding quantization precision (default: float32).",
+    )
 
     args = parser.parse_args()
+
+    if args.precision:
+        import os
+
+        os.environ["CONTEXT_TREE_EMBEDDING_PRECISION"] = args.precision
 
     if args.watch is not None:
         target_dirs = (

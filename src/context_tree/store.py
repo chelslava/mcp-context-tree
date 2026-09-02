@@ -47,8 +47,12 @@ class VectorStore:
         """Return the number of items in the collection."""
         return self.collection.count()
 
-    def upsert(self, chunks: Sequence[Chunk], embeddings: Sequence[Sequence[float]]) -> None:
-        """Insert or update chunks with their precomputed embeddings."""
+    def upsert(
+        self,
+        chunks: Sequence[Chunk],
+        embeddings: Sequence[Sequence[float | int]],
+    ) -> None:
+        """Insert or update chunks with their precomputed embeddings (float or quantized int)."""
         if not chunks:
             return
 
@@ -99,7 +103,7 @@ class VectorStore:
 
     def query(
         self,
-        query_embedding: Sequence[float],
+        query_embedding: Sequence[float | int],
         limit: int = 5,
         where: dict[str, Any] | None = None,
     ) -> list[SearchHit]:

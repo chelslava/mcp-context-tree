@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+import os
+
 # --- Vector store / index state -----------------------------------------------
 CHROMA_DIR_NAME = ".chroma"
 STATE_FILE_NAME = "index_state.json"
 COLLECTION_NAME = "context_tree"
 
-# --- Embeddings -----------------------------------------------------------------
+# --- Embeddings & Quantization --------------------------------------------------
 EMBEDDING_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 EMBEDDING_BATCH_SIZE = 64
+DEFAULT_EMBEDDING_PRECISION = os.getenv("CONTEXT_TREE_EMBEDDING_PRECISION", "float32")
+SUPPORTED_EMBEDDING_PRECISIONS: tuple[str, ...] = ("float32", "int8", "binary", "ubinary")
 
 # --- File scanning guards -------------------------------------------------------
 MAX_FILE_SIZE_BYTES = 1_000_000

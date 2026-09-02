@@ -8,7 +8,7 @@
 [![GitHub Release](https://img.shields.io/github/v/release/chelslava/mcp-context-tree?color=brightgreen&style=flat-square)](https://github.com/chelslava/mcp-context-tree/releases)
 [![Python Version](https://img.shields.io/badge/python-3.12%20%7C%203.13-blue?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![MCP Protocol](https://img.shields.io/badge/MCP-Protocol%20v2-purple?style=flat-square&logo=anthropic&logoColor=white)](https://modelcontextprotocol.io)
-[![Tests](https://img.shields.io/badge/tests-73%20passed-success?style=flat-square&logo=pytest&logoColor=white)](https://github.com/chelslava/mcp-context-tree/actions)
+[![Tests](https://img.shields.io/badge/tests-78%20passed-success?style=flat-square&logo=pytest&logoColor=white)](https://github.com/chelslava/mcp-context-tree/actions)
 [![Code Style](https://img.shields.io/badge/code%20style-ruff-000000?style=flat-square&logo=ruff&logoColor=white)](https://github.com/astral-sh/ruff)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](LICENSE)
 [![Privacy: 100% Offline](https://img.shields.io/badge/Privacy-100%25%20Offline-green?style=flat-square&logo=securityscorecard&logoColor=white)](#приватность-и-безопасность)
@@ -34,6 +34,7 @@
 
 - 🧩 **AST-парсинг логических блоков:** Индексирует целостные конструкции (функции, методы, классы, структуры, трейты, интерфейсы) с сохранением сигнатур и документации.
 - 🏢 **Многорепозиторная единая индексация:** Единая индексация и сквозной поиск по нескольким репозиториям или мульти-проектным рабочим областям за один запрос.
+- 🗜️ **Квантование эмбеддингов (INT8 & Binary):** Сжатие потребления RAM и хранилища в 4–32 раза со скалярными и бинарными векторными представлениями.
 - ⚡ **3-слойный гибридный поиск (RRF):** Объединяет векторный поиск (`sentence-transformers/all-MiniLM-L6-v2`), лексический BM25 (`camelCase`/`snake_case`) и **Call-Graph ранжирование по частоте вызовов**.
 - 🎯 **Двухэтапный Cross-Encoder реранкинг:** Совместное full cross-attention переранжирование (`rerank=True`) для максимальной точности сложных запросов.
 - 🔍 **Навигация без галлюцинаций:** Поиск реальных мест вызовов в AST (`find_ast_usages`) и точный переход к определению символа (`go_to_definition`).
