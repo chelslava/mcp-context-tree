@@ -8,7 +8,7 @@
 [![GitHub Release](https://img.shields.io/github/v/release/chelslava/mcp-context-tree?color=brightgreen&style=flat-square)](https://github.com/chelslava/mcp-context-tree/releases)
 [![Python Version](https://img.shields.io/badge/python-3.12%20%7C%203.13-blue?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![MCP Protocol](https://img.shields.io/badge/MCP-Protocol%20v2-purple?style=flat-square&logo=anthropic&logoColor=white)](https://modelcontextprotocol.io)
-[![Tests](https://img.shields.io/badge/tests-69%20passed-success?style=flat-square&logo=pytest&logoColor=white)](https://github.com/chelslava/mcp-context-tree/actions)
+[![Tests](https://img.shields.io/badge/tests-73%20passed-success?style=flat-square&logo=pytest&logoColor=white)](https://github.com/chelslava/mcp-context-tree/actions)
 [![Code Style](https://img.shields.io/badge/code%20style-ruff-000000?style=flat-square&logo=ruff&logoColor=white)](https://github.com/astral-sh/ruff)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](LICENSE)
 [![Privacy: 100% Offline](https://img.shields.io/badge/Privacy-100%25%20Offline-green?style=flat-square&logo=securityscorecard&logoColor=white)](#privacy--security)
@@ -33,10 +33,11 @@
 Standard semantic search tools split code into arbitrary line or token windows, breaking function contexts and hallucinating definitions. **ContextTree MCP** provides LLMs with true **structural intelligence** of your codebase:
 
 - 🧩 **AST Logical Block Extraction:** Indexes complete, meaningful units (functions, methods, classes, structs, traits) preserving docstrings and signatures.
+- 🏢 **Multi-Repository Unified Indexing:** Seamlessly index and search across multiple repositories or multi-root workspaces in a single session.
 - ⚡ **3-Layer Hybrid Search (RRF):** Blends dense vectors (`sentence-transformers/all-MiniLM-L6-v2`), BM25 lexical token matching (`camelCase`/`snake_case`), and **Call-Graph In-Degree Ranking**.
 - 🎯 **Cross-Encoder 2nd-Stage Re-ranking:** Joint cross-attention re-scoring (`rerank=True`) for maximum precision on nuanced queries.
 - 🔍 **Zero-Hallucination Code Navigation:** Real AST call-site tracking (`find_ast_usages`) and cross-file definition jump (`go_to_definition`).
-- 🔄 **Incremental Indexing & Watch Mode:** SHA-256 state tracking with 500ms debounced filesystem watcher.
+- 🔄 **Incremental Indexing & Watch Mode:** SHA-256 state tracking with 500ms debounced filesystem watcher across multiple workspaces.
 - 🌐 **Flexible Transports:** Standard `stdio`, `SSE` over HTTP, and `Streamable HTTP`.
 - 🔒 **100% Offline & Private:** Zero cloud dependencies, zero external API calls, zero telemetry.
 

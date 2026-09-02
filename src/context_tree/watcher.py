@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from watchfiles import Change, awatch
@@ -54,16 +54,18 @@ def _is_indexable_change(
 
 
 async def watch_workspace(
-    root: Path | str,
+    root: Path | str | Sequence[Path | str],
     debounce_ms: int = 500,
     indexer: Indexer | None = None,
     on_indexed: Callable[[IndexStats], None] | None = None,
     stop_event: asyncio.Event | None = None,
     lock: asyncio.Lock | None = None,
 ) -> None:
-    """Asynchronously monitor *root* and re-index when supported files change."""
-    root_path = Path(root).resolve()
-    idx = indexer or Indexer(root_path)
+    """Asynchronously monitor workspace root(s) and re-index when supported files change."""
+    from context_tree.indexer import resolve_workspace_roots
+
+    roots = resolve_workspace_roots(root)
+    idx = indexer or Indexer(roots)
 
     # Initial index pass
     if lock is not None:
@@ -75,15 +77,20 @@ async def watch_workspace(
     if on_indexed:
         on_indexed(initial_stats)
 
-    gitignore_file = root_path / ".gitignore"
+    async for changes in awatch(*roots, debounce=debounce_ms, stop_event=stop_event):
+        relevant = []
+        for change, p in changes:
+            p_resolved = Path(p).resolve()
+            for r in roots:
+                try:
+                    p_resolved.relative_to(r)
+                    patterns = _load_gitignore_patterns(r / ".gitignore")
+                    if _is_indexable_change(change, p, r, gitignore_patterns=patterns):
+                        relevant.append((change, p))
+                    break
+                except (ValueError, OSError):
+                    continue
 
-    async for changes in awatch(root_path, debounce=debounce_ms, stop_event=stop_event):
-        patterns = _load_gitignore_patterns(gitignore_file)
-        relevant = [
-            (change, p)
-            for change, p in changes
-            if _is_indexable_change(change, p, root_path, gitignore_patterns=patterns)
-        ]
         if not relevant:
             continue
 

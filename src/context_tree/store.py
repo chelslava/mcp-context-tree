@@ -64,18 +64,29 @@ class VectorStore:
             embeddings=raw_embeddings,  # type: ignore[arg-type]
         )
 
-    def delete_by_files(self, files: Sequence[str]) -> None:
+    def delete_by_files(self, files: Sequence[str], repo: str | None = None) -> None:
         """Delete all chunk records belonging to any of the specified file paths."""
         if not files:
             return
         for file_path in files:
-            self.collection.delete(where={"file": file_path})
+            if repo:
+                self.collection.delete(where={"$and": [{"file": file_path}, {"repo": repo}]})
+            else:
+                self.collection.delete(where={"file": file_path})
 
-    def get_all_documents(self) -> list[tuple[str, str, dict[str, Any]]]:
-        """Fetch all indexed (id, document, metadata) records."""
+    def delete_by_repo(self, repo: str) -> None:
+        """Delete all chunk records belonging to the specified repository."""
+        if repo:
+            self.collection.delete(where={"repo": repo})
+
+    def get_all_documents(self, repo: str | None = None) -> list[tuple[str, str, dict[str, Any]]]:
+        """Fetch all indexed (id, document, metadata) records, optionally filtered by repo."""
         if self.count() == 0:
             return []
-        data = self.collection.get(include=["documents", "metadatas"])  # type: ignore[list-item]
+        if repo:
+            data = self.collection.get(where={"repo": repo}, include=["documents", "metadatas"])  # type: ignore[list-item]
+        else:
+            data = self.collection.get(include=["documents", "metadatas"])  # type: ignore[list-item]
         ids = data.get("ids", [])
         docs = data.get("documents", []) or []
         metas = data.get("metadatas", []) or []
@@ -86,16 +97,25 @@ class VectorStore:
             records.append((doc_id, str(doc), meta))
         return records
 
-    def query(self, query_embedding: Sequence[float], limit: int = 5) -> list[SearchHit]:
-        """Query top-k most similar records by cosine similarity."""
+    def query(
+        self,
+        query_embedding: Sequence[float],
+        limit: int = 5,
+        where: dict[str, Any] | None = None,
+    ) -> list[SearchHit]:
+        """Query top-k most similar records by cosine similarity, with optional metadata filter."""
         if self.count() == 0:
             return []
 
-        results = self.collection.query(
-            query_embeddings=[list(query_embedding)],
-            n_results=min(limit, self.count()),
-            include=["metadatas", "documents", "distances"],  # type: ignore[list-item]
-        )
+        query_kwargs: dict[str, Any] = {
+            "query_embeddings": [list(query_embedding)],
+            "n_results": min(limit, self.count()),
+            "include": ["metadatas", "documents", "distances"],
+        }
+        if where is not None:
+            query_kwargs["where"] = where
+
+        results = self.collection.query(**query_kwargs)
 
         hits: list[SearchHit] = []
         ids_list = results.get("ids", [[]])[0]

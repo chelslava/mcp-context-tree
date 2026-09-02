@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import fnmatch
 import os
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -155,72 +156,101 @@ def discover_files(root: Path) -> dict[str, Path]:
     return candidates
 
 
+def resolve_workspace_roots(
+    roots: Path | str | Sequence[Path | str] | None = None,
+) -> list[Path]:
+    """Normalize single path, list/sequence of paths, or delimited string into resolved Paths."""
+    if roots is None:
+        return [Path(".").resolve()]
+    if isinstance(roots, (Path, str)):
+        if isinstance(roots, str) and ("," in roots or ";" in roots):
+            delim = "," if "," in roots else ";"
+            raw_parts = [p.strip() for p in roots.split(delim) if p.strip()]
+            resolved = [Path(p).resolve() for p in raw_parts if Path(p).is_dir()]
+            return resolved if resolved else [Path(roots).resolve()]
+        return [Path(roots).resolve()]
+    resolved_list = [Path(r).resolve() for r in roots]
+    return resolved_list if resolved_list else [Path(".").resolve()]
+
+
 class Indexer:
     """Coordinates workspace indexing into VectorStore."""
 
     def __init__(
         self,
-        root: Path | str,
+        root: Path | str | Sequence[Path | str],
         store: VectorStore | None = None,
         embedder: Embedder | None = None,
     ) -> None:
-        self.root = Path(root).resolve()
+        self.roots = resolve_workspace_roots(root)
+        self.root = self.roots[0]
         self.chroma_dir = self.root / CHROMA_DIR_NAME
         self.state_file = self.chroma_dir / STATE_FILE_NAME
         self.store = store or VectorStore(self.chroma_dir)
         self.embedder = embedder or Embedder()
 
     def index(self) -> IndexStats:
-        """Run incremental indexing on the workspace root."""
-        candidates = discover_files(self.root)
-        old_state = load_state(self.state_file)
-        diff, new_state = diff_state(candidates, old_state)
+        """Run incremental indexing on the workspace roots."""
+        total_added = 0
+        total_modified = 0
+        total_deleted = 0
+        total_unchanged = 0
+        total_indexed_chunks = 0
+        is_multi_root = len(self.roots) > 1
 
-        # Fast-path: no changes detected
-        if not diff.has_changes:
-            return IndexStats(
-                added=0,
-                modified=0,
-                deleted=0,
-                unchanged=len(diff.unchanged),
-                indexed_chunks=0,
-                total_in_store=self.store.count(),
-            )
-
-        # Remove stale vectors for modified and deleted files
-        stale_files = diff.modified + diff.deleted
-        if stale_files:
-            self.store.delete_by_files(stale_files)
-
-        # Process added and modified files
-        new_chunks: list[Chunk] = []
-        files_to_process = sorted(diff.added + diff.modified)
-
-        for rel_path in files_to_process:
-            abs_path = candidates[rel_path]
-            blocks = extract_blocks(abs_path, root=self.root)
-            file_chunks = chunk_blocks(blocks)
-            new_chunks.extend(file_chunks)
-
-        # Embed and upsert new chunks
-        if new_chunks:
-            documents = [c.document for c in new_chunks]
-            embeddings = self.embedder.encode(documents, batch_size=EMBEDDING_BATCH_SIZE)
-            self.store.upsert(new_chunks, embeddings)
-
-        # Atomically commit new state
-        save_state_atomic(new_state, self.state_file)
-
-        # Invalidate cached in-memory BM25 index
         from context_tree.search import invalidate_bm25_cache
+
+        for workspace_root in self.roots:
+            repo_name = workspace_root.name if is_multi_root else ""
+            state_file = workspace_root / CHROMA_DIR_NAME / STATE_FILE_NAME
+            candidates = discover_files(workspace_root)
+            old_state = load_state(state_file)
+            diff, new_state = diff_state(candidates, old_state)
+
+            total_unchanged += len(diff.unchanged)
+
+            if not diff.has_changes:
+                continue
+
+            total_added += len(diff.added)
+            total_modified += len(diff.modified)
+            total_deleted += len(diff.deleted)
+
+            # Remove stale vectors for modified and deleted files
+            stale_files = diff.modified + diff.deleted
+            if stale_files:
+                self.store.delete_by_files(stale_files, repo=repo_name if is_multi_root else None)
+
+            # Process added and modified files
+            new_chunks: list[Chunk] = []
+            files_to_process = sorted(diff.added + diff.modified)
+
+            for rel_path in files_to_process:
+                abs_path = candidates[rel_path]
+                blocks = extract_blocks(abs_path, root=workspace_root)
+                file_chunks = chunk_blocks(blocks, repo=repo_name)
+                new_chunks.extend(file_chunks)
+
+            # Embed and upsert new chunks
+            if new_chunks:
+                documents = [c.document for c in new_chunks]
+                embeddings = self.embedder.encode(documents, batch_size=EMBEDDING_BATCH_SIZE)
+                self.store.upsert(new_chunks, embeddings)
+                total_indexed_chunks += len(new_chunks)
+
+            # Atomically commit new state
+            save_state_atomic(new_state, state_file)
+
+            # Invalidate cached in-memory BM25 index
+            invalidate_bm25_cache(workspace_root)
 
         invalidate_bm25_cache(self.root)
 
         return IndexStats(
-            added=len(diff.added),
-            modified=len(diff.modified),
-            deleted=len(diff.deleted),
-            unchanged=len(diff.unchanged),
-            indexed_chunks=len(new_chunks),
+            added=total_added,
+            modified=total_modified,
+            deleted=total_deleted,
+            unchanged=total_unchanged,
+            indexed_chunks=total_indexed_chunks,
             total_in_store=self.store.count(),
         )

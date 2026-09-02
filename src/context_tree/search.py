@@ -5,6 +5,7 @@ Implements ARCHITECTURE.md §9 & v0.2 Hybrid Search (BM25 + RRF).
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -60,9 +61,10 @@ class SearchResult:
     end_line: int
     score: float
     code: str
+    repo: str = ""
 
     def to_dict(self) -> dict:
-        return {
+        data = {
             "file": self.file,
             "type": self.type,
             "class": self.class_chain,
@@ -72,21 +74,38 @@ class SearchResult:
             "score": round(self.score, 4),
             "code": self.code,
         }
+        if self.repo:
+            data["repo"] = self.repo
+        return data
 
 
 def read_snippet_from_disk(
-    root: Path, rel_file: str, start_line: int, end_line: int, fallback_doc: str
+    roots: Path | Sequence[Path],
+    rel_file: str,
+    start_line: int,
+    end_line: int,
+    fallback_doc: str,
+    repo: str = "",
 ) -> str:
-    """Read snippet lines [start_line..end_line] from disk if file exists."""
-    file_path = (root / rel_file).resolve()
-    if file_path.is_file():
-        try:
-            lines = file_path.read_text(encoding="utf-8", errors="replace").splitlines()
-            selected = lines[max(0, start_line - 1) : end_line]
-            if selected:
-                return "\n".join(selected)
-        except OSError:
-            pass
+    """Read snippet lines [start_line..end_line] from disk if file exists in any workspace root."""
+    root_list = [roots] if isinstance(roots, Path) else list(roots)
+
+    # If repo is specified, prioritize matching root directory
+    if repo:
+        matched = [r for r in root_list if r.name == repo]
+        if matched:
+            root_list = matched + [r for r in root_list if r.name != repo]
+
+    for root_dir in root_list:
+        file_path = (root_dir / rel_file).resolve()
+        if file_path.is_file():
+            try:
+                lines = file_path.read_text(encoding="utf-8", errors="replace").splitlines()
+                selected = lines[max(0, start_line - 1) : end_line]
+                if selected:
+                    return "\n".join(selected)
+            except OSError:
+                pass
 
     marker = "Code:\n"
     if marker in fallback_doc:
@@ -95,17 +114,21 @@ def read_snippet_from_disk(
 
 
 def semantic_search(
-    root: Path | str,
+    root: Path | str | Sequence[Path | str],
     query: str,
     limit: int = DEFAULT_SEARCH_LIMIT,
     mode: SearchMode = "hybrid",
     store: VectorStore | None = None,
     embedder: Embedder | None = None,
     rerank: bool = False,
+    repo: str | None = None,
 ) -> list[SearchResult]:
-    """Execute code search (hybrid BM25+RRF, semantic, or keyword) over workspace."""
-    root_path = Path(root).resolve()
-    chroma_dir = root_path / CHROMA_DIR_NAME
+    """Execute code search (hybrid BM25+RRF, semantic, or keyword) over workspace(s)."""
+    from context_tree.indexer import resolve_workspace_roots
+
+    roots = resolve_workspace_roots(root)
+    primary_root = roots[0]
+    chroma_dir = primary_root / CHROMA_DIR_NAME
     vstore = store or VectorStore(chroma_dir)
 
     if vstore.count() == 0:
@@ -113,24 +136,25 @@ def semantic_search(
 
     emb = embedder or Embedder()
     hits: list[SearchHit] = []
+    where_filter = {"repo": repo} if repo else None
 
     # If rerank is enabled, fetch more initial candidates to rerank
     candidate_limit = max(limit * 3, 15) if rerank else limit
 
     if mode == "semantic":
         q_vec = emb.encode_single(query)
-        hits = vstore.query(q_vec, limit=candidate_limit)
+        hits = vstore.query(q_vec, limit=candidate_limit, where=where_filter)
 
     elif mode == "keyword":
-        bm25 = get_or_build_bm25(root_path, vstore)
-        hits = bm25.query(query, limit=candidate_limit)
+        bm25 = get_or_build_bm25(primary_root, vstore)
+        hits = bm25.query(query, limit=candidate_limit, where_repo=repo)
 
     else:  # hybrid
         q_vec = emb.encode_single(query)
-        vec_hits = vstore.query(q_vec, limit=max(candidate_limit * 2, 10))
+        vec_hits = vstore.query(q_vec, limit=max(candidate_limit * 2, 10), where=where_filter)
 
-        bm25 = get_or_build_bm25(root_path, vstore)
-        bm25_hits = bm25.query(query, limit=max(candidate_limit * 2, 10))
+        bm25 = get_or_build_bm25(primary_root, vstore)
+        bm25_hits = bm25.query(query, limit=max(candidate_limit * 2, 10), where_repo=repo)
 
         # Compute call-graph ranks for candidate pool based on AST usage frequency
         from context_tree.usages import batch_count_ast_usages
@@ -141,7 +165,7 @@ def semantic_search(
             for h in candidates.values()
             if str(h.metadata.get("name", "")).strip()
         }
-        symbol_counts = batch_count_ast_usages(root_path, symbol_names, max_hits_per_symbol=50)
+        symbol_counts = batch_count_ast_usages(roots, symbol_names, max_hits_per_symbol=50)
 
         sorted_by_usage = sorted(
             candidates.keys(),
@@ -171,8 +195,11 @@ def semantic_search(
         b_type = str(meta.get("type", "function"))
         class_chain = str(meta.get("class", ""))
         name = str(meta.get("name", ""))
+        repo_val = str(meta.get("repo", ""))
 
-        code = read_snippet_from_disk(root_path, rel_file, start_line, end_line, hit.document)
+        code = read_snippet_from_disk(
+            roots, rel_file, start_line, end_line, hit.document, repo=repo_val
+        )
 
         results.append(
             SearchResult(
@@ -184,6 +211,7 @@ def semantic_search(
                 end_line=end_line,
                 score=hit.score,
                 code=code,
+                repo=repo_val,
             )
         )
 

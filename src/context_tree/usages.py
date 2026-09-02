@@ -8,6 +8,7 @@ Implements ARCHITECTURE.md §10:
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -24,13 +25,17 @@ class UsageHit:
     file: str
     line: int
     preview: str
+    repo: str = ""
 
     def to_dict(self) -> dict:
-        return {
+        data = {
             "file": self.file,
             "line": self.line,
             "preview": self.preview,
         }
+        if self.repo:
+            data["repo"] = self.repo
+        return data
 
 
 def _matches_target(callee_text: str, target: str) -> bool:
@@ -116,31 +121,51 @@ def _find_calls_in_node(
         _find_calls_in_node(child, source, target, rel_path, hits, lines, max_hits)
 
 
-def find_ast_usages(root: Path | str, symbol_name: str, max_hits: int = 50) -> list[UsageHit]:
-    """Find real call sites of *symbol_name* across all supported files in workspace."""
-    root_path = Path(root).resolve()
-    candidates = discover_files(root_path)
+def find_ast_usages(
+    root: Path | str | Sequence[Path | str],
+    symbol_name: str,
+    max_hits: int = 50,
+    repo: str | None = None,
+) -> list[UsageHit]:
+    """Find real call sites of *symbol_name* across all supported files in workspace(s)."""
+    from context_tree.indexer import resolve_workspace_roots
 
+    roots = resolve_workspace_roots(root)
     hits: list[UsageHit] = []
+    is_multi_root = len(roots) > 1
 
-    for rel_path, abs_path in sorted(candidates.items()):
-        if len(hits) >= max_hits:
-            break
-
-        parsed = parse_file(abs_path, root=root_path)
-        if parsed is None:
+    for r in roots:
+        repo_name = r.name if is_multi_root else ""
+        if repo and r.name != repo:
             continue
+        candidates = discover_files(r)
 
-        lines = parsed.source.decode("utf-8", errors="replace").splitlines()
-        _find_calls_in_node(
-            parsed.tree.root_node,
-            parsed.source,
-            symbol_name,
-            rel_path,
-            hits,
-            lines,
-            max_hits,
-        )
+        for rel_path, abs_path in sorted(candidates.items()):
+            if len(hits) >= max_hits:
+                break
+
+            parsed = parse_file(abs_path, root=r)
+            if parsed is None:
+                continue
+
+            lines = parsed.source.decode("utf-8", errors="replace").splitlines()
+            root_hits: list[UsageHit] = []
+            _find_calls_in_node(
+                parsed.tree.root_node,
+                parsed.source,
+                symbol_name,
+                rel_path,
+                root_hits,
+                lines,
+                max_hits - len(hits),
+            )
+            for h in root_hits:
+                if repo_name:
+                    hits.append(
+                        UsageHit(file=h.file, line=h.line, preview=h.preview, repo=repo_name)
+                    )
+                else:
+                    hits.append(h)
 
     return hits
 
@@ -168,7 +193,7 @@ def _batch_count_in_node(
 
 
 def batch_count_ast_usages(
-    root: Path | str,
+    root: Path | str | Sequence[Path | str],
     symbol_names: set[str] | list[str] | tuple[str, ...],
     max_hits_per_symbol: int = 50,
 ) -> dict[str, int]:
@@ -177,7 +202,9 @@ def batch_count_ast_usages(
     Performs an $O(N)$ workspace scan across all candidate symbols simultaneously,
     matching bare and qualified / dotted names without repeated disk I/O or AST parsing.
     """
-    root_path = Path(root).resolve()
+    from context_tree.indexer import resolve_workspace_roots
+
+    roots = resolve_workspace_roots(root)
     counts: dict[str, int] = {}
     norm_to_symbols: dict[str, list[str]] = {}
 
@@ -192,22 +219,23 @@ def batch_count_ast_usages(
     if not norm_to_symbols:
         return counts
 
-    candidates = discover_files(root_path)
+    for r in roots:
+        candidates = discover_files(r)
 
-    for _rel_path, abs_path in sorted(candidates.items()):
-        if all(counts[sym] >= max_hits_per_symbol for sym in counts):
-            break
+        for _rel_path, abs_path in sorted(candidates.items()):
+            if all(counts[sym] >= max_hits_per_symbol for sym in counts):
+                break
 
-        parsed = parse_file(abs_path, root=root_path)
-        if parsed is None:
-            continue
+            parsed = parse_file(abs_path, root=r)
+            if parsed is None:
+                continue
 
-        _batch_count_in_node(
-            parsed.tree.root_node,
-            parsed.source,
-            norm_to_symbols,
-            counts,
-            max_hits_per_symbol,
-        )
+            _batch_count_in_node(
+                parsed.tree.root_node,
+                parsed.source,
+                norm_to_symbols,
+                counts,
+                max_hits_per_symbol,
+            )
 
     return counts

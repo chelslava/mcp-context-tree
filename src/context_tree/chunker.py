@@ -35,10 +35,11 @@ class Chunk:
     start_line: int
     end_line: int
     content_hash: str
+    repo: str = ""
 
     def to_metadata(self) -> dict[str, str | int]:
         """Convert to ChromaDB-compatible metadata dictionary."""
-        return {
+        meta: dict[str, str | int] = {
             "file": self.file,
             "type": self.chunk_type,
             "class": self.class_chain,
@@ -48,6 +49,9 @@ class Chunk:
             "end_line": self.end_line,
             "content_hash": self.content_hash,
         }
+        if self.repo:
+            meta["repo"] = self.repo
+        return meta
 
 
 def compute_content_hash(code: str) -> str:
@@ -73,11 +77,12 @@ def render_document(
     return "\n".join(parts)
 
 
-def build_base_id(file_path: str, name: str, class_chain: str = "") -> str:
+def build_base_id(file_path: str, name: str, class_chain: str = "", repo: str = "") -> str:
     """Build base chunk ID according to ARCHITECTURE.md §7.1."""
+    prefix = f"{repo}::" if repo else ""
     if class_chain:
-        return f"{file_path}::{class_chain}::{name}"
-    return f"{file_path}::{name}"
+        return f"{prefix}{file_path}::{class_chain}::{name}"
+    return f"{prefix}{file_path}::{name}"
 
 
 def _split_oversized_code(
@@ -114,9 +119,9 @@ def _split_oversized_code(
     return slices
 
 
-def chunk_block(block: CodeBlock) -> list[Chunk]:
+def chunk_block(block: CodeBlock, repo: str = "") -> list[Chunk]:
     """Convert a single CodeBlock into one or more Chunks."""
-    base_id = build_base_id(block.file, block.name, block.class_chain)
+    base_id = build_base_id(block.file, block.name, block.class_chain, repo=repo)
     full_hash = compute_content_hash(block.code)
 
     if len(block.code) <= MAX_BLOCK_CHARS:
@@ -139,6 +144,7 @@ def chunk_block(block: CodeBlock) -> list[Chunk]:
                 start_line=block.start_line,
                 end_line=block.end_line,
                 content_hash=full_hash,
+                repo=repo,
             )
         ]
 
@@ -166,18 +172,19 @@ def chunk_block(block: CodeBlock) -> list[Chunk]:
                 start_line=slice_start,
                 end_line=slice_end,
                 content_hash=compute_content_hash(slice_code),
+                repo=repo,
             )
         )
     return chunks
 
 
-def chunk_blocks(blocks: Sequence[CodeBlock]) -> list[Chunk]:
+def chunk_blocks(blocks: Sequence[CodeBlock], repo: str = "") -> list[Chunk]:
     """Convert a sequence of CodeBlocks into unique Chunks with collision handling."""
     seen_ids: dict[str, int] = {}
     all_chunks: list[Chunk] = []
 
     for block in blocks:
-        for chunk in chunk_block(block):
+        for chunk in chunk_block(block, repo=repo):
             raw_id = chunk.id
             if raw_id not in seen_ids:
                 seen_ids[raw_id] = 1
@@ -197,6 +204,7 @@ def chunk_blocks(blocks: Sequence[CodeBlock]) -> list[Chunk]:
                         start_line=chunk.start_line,
                         end_line=chunk.end_line,
                         content_hash=chunk.content_hash,
+                        repo=repo,
                     )
                 )
 

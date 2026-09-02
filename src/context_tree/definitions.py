@@ -6,6 +6,7 @@ traits, and interfaces across all supported languages.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -29,9 +30,10 @@ class DefinitionHit:
     end_line: int
     code: str
     docstring: str = ""
+    repo: str = ""
 
     def to_dict(self) -> dict:
-        return {
+        data = {
             "file": self.file,
             "language": self.language,
             "type": self.type,
@@ -42,6 +44,9 @@ class DefinitionHit:
             "code": self.code,
             "docstring": self.docstring,
         }
+        if self.repo:
+            data["repo"] = self.repo
+        return data
 
 
 def _matches_target(block: CodeBlock, target: str) -> bool:
@@ -90,10 +95,16 @@ def _matches_meta_target(name: str, class_chain: str, target: str) -> bool:
 
 
 def find_symbol_definitions(
-    root: Path | str, symbol_name: str, max_hits: int = 20
+    root: Path | str | Sequence[Path | str],
+    symbol_name: str,
+    max_hits: int = 20,
+    repo: str | None = None,
 ) -> list[DefinitionHit]:
-    """Find exact definition/declaration sites for *symbol_name* in the workspace."""
-    root_path = Path(root).resolve()
+    """Find exact definition/declaration sites for *symbol_name* in the workspace(s)."""
+    from context_tree.indexer import resolve_workspace_roots
+
+    roots = resolve_workspace_roots(root)
+    primary_root = roots[0]
     target_norm = symbol_name.strip().replace("::", ".")
     if not target_norm:
         return []
@@ -101,13 +112,16 @@ def find_symbol_definitions(
     name_part = target_norm.split(".")[-1] if "." in target_norm else target_norm
 
     # 1. Fast-path: query persistent ChromaDB vector store metadata if workspace is indexed
-    chroma_dir = root_path / CHROMA_DIR_NAME
+    chroma_dir = primary_root / CHROMA_DIR_NAME
     if chroma_dir.is_dir():
         try:
             vstore = VectorStore(chroma_dir)
             if vstore.count() > 0:
+                where_filter = (
+                    {"$and": [{"name": name_part}, {"repo": repo}]} if repo else {"name": name_part}
+                )
                 data = vstore.collection.get(
-                    where={"name": name_part},
+                    where=where_filter,  # type: ignore[arg-type]
                     include=["metadatas", "documents"],  # type: ignore[list-item]
                 )
                 metas = data.get("metadatas", []) or []
@@ -129,6 +143,7 @@ def find_symbol_definitions(
                     end_line = int(meta.get("end_line", 1))
                     language = str(meta.get("language", ""))
                     b_type = str(meta.get("type", "function"))
+                    repo_val = str(meta.get("repo", ""))
 
                     key = (rel_file, start_line, name)
                     if key in seen:
@@ -137,7 +152,7 @@ def find_symbol_definitions(
 
                     fallback_doc = docs[i] if i < len(docs) and docs[i] is not None else ""
                     code = read_snippet_from_disk(
-                        root_path, rel_file, start_line, end_line, str(fallback_doc)
+                        roots, rel_file, start_line, end_line, str(fallback_doc), repo=repo_val
                     )
 
                     hits.append(
@@ -150,6 +165,7 @@ def find_symbol_definitions(
                             start_line=start_line,
                             end_line=end_line,
                             code=code,
+                            repo=repo_val,
                         )
                     )
                     if len(hits) >= max_hits:
@@ -161,29 +177,36 @@ def find_symbol_definitions(
             pass
 
     # 2. Slow-path / Fallback: discover and extract AST blocks from disk files
-    candidates = discover_files(root_path)
+    is_multi_root = len(roots) > 1
     hits = []
-    for _rel_path, abs_path in sorted(candidates.items()):
-        if len(hits) >= max_hits:
-            break
+    for r in roots:
+        repo_name = r.name if is_multi_root else ""
+        if repo and r.name != repo:
+            continue
+        candidates = discover_files(r)
 
-        blocks = extract_blocks(abs_path, root=root_path)
-        for block in blocks:
-            if _matches_target(block, symbol_name):
-                hits.append(
-                    DefinitionHit(
-                        file=block.file,
-                        language=block.language,
-                        type=block.block_type,
-                        name=block.name,
-                        class_chain=block.class_chain,
-                        start_line=block.start_line,
-                        end_line=block.end_line,
-                        code=block.code,
-                        docstring=block.docstring,
+        for _rel_path, abs_path in sorted(candidates.items()):
+            if len(hits) >= max_hits:
+                break
+
+            blocks = extract_blocks(abs_path, root=r)
+            for block in blocks:
+                if _matches_target(block, symbol_name):
+                    hits.append(
+                        DefinitionHit(
+                            file=block.file,
+                            language=block.language,
+                            type=block.block_type,
+                            name=block.name,
+                            class_chain=block.class_chain,
+                            start_line=block.start_line,
+                            end_line=block.end_line,
+                            code=block.code,
+                            docstring=block.docstring,
+                            repo=repo_name,
+                        )
                     )
-                )
-                if len(hits) >= max_hits:
-                    break
+                    if len(hits) >= max_hits:
+                        break
 
     return hits

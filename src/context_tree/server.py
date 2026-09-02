@@ -11,7 +11,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from pathlib import Path
 
 from mcp.server import MCPServer
 
@@ -34,37 +33,42 @@ def create_server() -> MCPServer:
 
     @app.tool(
         description=(
-            "Walks the project, detects changed files by SHA-256 hash, and "
-            "incrementally updates the persistent local ChromaDB vector store."
+            "Walks the project or multiple workspace repositories, detects changed files by "
+            "SHA-256 hash, and incrementally updates the persistent local ChromaDB vector store. "
+            "Supports single directory path or multiple comma-separated workspace paths."
         )
     )
     async def index_workspace(directory_path: str = ".") -> str:
         """Index or incrementally update the workspace vector store."""
         async with _MUTEX:
-            target = Path(directory_path).resolve()
-            if not target.is_dir():
+            from context_tree.indexer import resolve_workspace_roots
+
+            roots = resolve_workspace_roots(directory_path)
+            valid_roots = [r for r in roots if r.is_dir()]
+            if not valid_roots:
                 return json.dumps({"error": f"Directory not found: {directory_path}"})
-            indexer = Indexer(target)
+            indexer = Indexer(valid_roots)
             stats = indexer.index()
-            return json.dumps(
-                {
-                    "status": "ok",
-                    "workspace": str(target),
-                    "added": stats.added,
-                    "modified": stats.modified,
-                    "deleted": stats.deleted,
-                    "unchanged": stats.unchanged,
-                    "indexed_chunks": stats.indexed_chunks,
-                    "total_in_store": stats.total_in_store,
-                },
-                indent=2,
-            )
+            payload: dict = {
+                "status": "ok",
+                "workspace": str(valid_roots[0]),
+                "added": stats.added,
+                "modified": stats.modified,
+                "deleted": stats.deleted,
+                "unchanged": stats.unchanged,
+                "indexed_chunks": stats.indexed_chunks,
+                "total_in_store": stats.total_in_store,
+            }
+            if len(valid_roots) > 1:
+                payload["workspaces"] = [str(r) for r in valid_roots]
+            return json.dumps(payload, indent=2)
 
     @app.tool(
         description=(
-            "Search code by meaning and keywords (hybrid BM25+vectors, semantic, or keyword). "
-            "Returns ranked code fragments with exact file, class, method, start_line, end_line, "
-            "and code snippets. Supports optional Cross-Encoder re-ranking (rerank=True)."
+            "Search code by meaning and keywords (hybrid BM25+vectors, semantic, or keyword) "
+            "across one or more repositories. Returns ranked code fragments with exact file, "
+            "repo, class, method, start_line, end_line, and code snippets. "
+            "Supports optional Cross-Encoder re-ranking (rerank=True) and repo filter."
         )
     )
     async def semantic_search(
@@ -73,47 +77,59 @@ def create_server() -> MCPServer:
         limit: int = DEFAULT_SEARCH_LIMIT,
         mode: SearchMode = "hybrid",
         rerank: bool = False,
+        repo: str | None = None,
     ) -> str:
         """Search code using hybrid, semantic, or keyword matching with optional reranking."""
         async with _MUTEX:
-            target = Path(directory_path).resolve()
-            results = do_semantic_search(target, query, limit=limit, mode=mode, rerank=rerank)
+            from context_tree.indexer import resolve_workspace_roots
+
+            roots = resolve_workspace_roots(directory_path)
+            results = do_semantic_search(
+                roots, query, limit=limit, mode=mode, rerank=rerank, repo=repo
+            )
             return json.dumps({"results": [r.to_dict() for r in results]}, indent=2)
 
     @app.tool(
         description=(
-            "AST-based lookup of real call sites / instantiations of a function or class. "
-            "Filters out string literals, comments, and non-call occurrences."
+            "AST-based lookup of real call sites / instantiations of a function or class "
+            "across one or more repositories. Filters out string literals, comments, "
+            "and non-call occurrences."
         )
     )
     async def find_ast_usages(
         symbol_name: str,
         directory_path: str = ".",
         limit: int = 50,
+        repo: str | None = None,
     ) -> str:
-        """Find AST call sites of a symbol across the workspace."""
+        """Find AST call sites of a symbol across the workspace(s)."""
         async with _MUTEX:
-            target = Path(directory_path).resolve()
-            hits = do_find_ast_usages(target, symbol_name, max_hits=limit)
+            from context_tree.indexer import resolve_workspace_roots
+
+            roots = resolve_workspace_roots(directory_path)
+            hits = do_find_ast_usages(roots, symbol_name, max_hits=limit, repo=repo)
             return json.dumps({"usages": [h.to_dict() for h in hits]}, indent=2)
 
     @app.tool(
         description=(
             "Finds the exact definition/declaration location of a symbol (function, "
-            "method, class, struct, trait, interface) across workspace files."
+            "method, class, struct, trait, interface) across workspace files and repositories."
         )
     )
     async def go_to_definition(
         symbol_name: str,
         directory_path: str = ".",
         limit: int = 20,
+        repo: str | None = None,
     ) -> str:
-        """Find exact AST declaration sites of a symbol across the workspace."""
+        """Find exact AST declaration sites of a symbol across the workspace(s)."""
         async with _MUTEX:
-            target = Path(directory_path).resolve()
+            from context_tree.indexer import resolve_workspace_roots
+
+            roots = resolve_workspace_roots(directory_path)
             from context_tree.definitions import find_symbol_definitions
 
-            hits = find_symbol_definitions(target, symbol_name, max_hits=limit)
+            hits = find_symbol_definitions(roots, symbol_name, max_hits=limit, repo=repo)
             return json.dumps({"definitions": [h.to_dict() for h in hits]}, indent=2)
 
     return app

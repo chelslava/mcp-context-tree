@@ -23,10 +23,9 @@ def main() -> None:
     )
     parser.add_argument(
         "--watch",
-        nargs="?",
-        const=".",
+        nargs="*",
         metavar="PATH",
-        help="Run in watch mode: monitor directory and incrementally re-index on change.",
+        help="Run in watch mode: monitor directories and re-index on change.",
     )
     parser.add_argument(
         "--transport",
@@ -49,8 +48,11 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.watch is not None:
-        target_dir = Path(args.watch).resolve()
-        print(f"ContextTree MCP Watcher starting on: {target_dir}")
+        target_dirs = (
+            [Path(p).resolve() for p in args.watch] if args.watch else [Path(".").resolve()]
+        )
+        paths_str = ", ".join(str(p) for p in target_dirs)
+        print(f"ContextTree MCP Watcher starting on: {paths_str}")
 
         def log_stats(stats):
             if stats.indexed_chunks > 0 or stats.deleted > 0:
@@ -60,7 +62,7 @@ def main() -> None:
                 )
 
         try:
-            asyncio.run(watch_workspace(target_dir, on_indexed=log_stats))
+            asyncio.run(watch_workspace(target_dirs, on_indexed=log_stats))
         except KeyboardInterrupt:
             print("\nWatcher stopped.")
             sys.exit(0)

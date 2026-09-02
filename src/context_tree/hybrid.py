@@ -98,7 +98,9 @@ class BM25Index:
         self.total_docs = len(self.docs)
         self.avg_len = (total_len / self.total_docs) if self.total_docs > 0 else 0.0
 
-    def query(self, query_text: str, limit: int = 10) -> list[SearchHit]:
+    def query(
+        self, query_text: str, limit: int = 10, where_repo: str | None = None
+    ) -> list[SearchHit]:
         """Query index and return top-k SearchHits ranked by BM25 score."""
         if self.total_docs == 0:
             return []
@@ -110,6 +112,8 @@ class BM25Index:
         scores: list[tuple[float, BM25Document]] = []
 
         for doc in self.docs:
+            if where_repo and doc.metadata.get("repo") != where_repo:
+                continue
             score = 0.0
             for q in q_tokens:
                 if q not in doc.term_counts:
